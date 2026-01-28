@@ -1,4 +1,9 @@
-import { BRIDGE_CHANNEL, MacroBridgeRequest, MacroBridgeResponse } from '../lib/protocol';
+import {
+  BRIDGE_CHANNEL,
+  MacroBridgeRequest,
+  MacroBridgeResponse,
+  BridgeMacro,
+} from "../lib/protocol";
 
 export function sendToBridge(req: MacroBridgeRequest) {
   window.postMessage({ channel: BRIDGE_CHANNEL, payload: req }, "*");
@@ -31,45 +36,38 @@ export function waitForBridgeResponse<T extends MacroBridgeResponse["type"]>(
 
 export function injectBridgeScript() {
   const s = document.createElement("script");
-  // Update path to dist/pageBridge.js (bundled)
-  // Usually this is correct if the key matches web_accessible_resources
-  s.src = chrome.runtime.getURL("dist/content/pageBridge.js"); 
+  s.src = chrome.runtime.getURL("dist/content/pageBridge.js");
   s.type = "text/javascript";
   (document.head || document.documentElement).appendChild(s);
   s.onload = () => s.remove();
 }
 
-export async function getStateFromBridge() {
+export async function pingBridge(timeoutMs = 200): Promise<boolean> {
   try {
-    sendToBridge({ type: "GET_STATE" });
-    const resp = await waitForBridgeResponse("STATE", 200);
-    return resp;
-  } catch (e) {
-    return { ok: false, reason: String(e) } as const;
+    sendToBridge({ type: "PING" });
+    await waitForBridgeResponse("PONG", timeoutMs);
+    return true;
+  } catch {
+    return false;
   }
 }
 
-export async function applyEditViaBridge(edit: { start: number; end: number; text: string }, selection: { start: number; end: number }) {
-  sendToBridge({ type: "APPLY_EDIT", edit, selection });
+export async function setConfigViaBridge(enabled: boolean, macros: BridgeMacro[]) {
+  sendToBridge({ type: "SET_CONFIG", enabled, macros });
   try {
-    const resp = await waitForBridgeResponse("APPLY_OK", 300);
+    await waitForBridgeResponse("CONFIG_OK", 300);
     return { ok: true } as const;
   } catch (e) {
-    // Check if it failed explicitly
+    // If it failed explicitly
     try {
-        const fail = await waitForBridgeResponse("APPLY_FAIL", 50);
-        return { ok: false, reason: fail.reason } as const;
+      const fail = await waitForBridgeResponse("CONFIG_FAIL", 50);
+      return { ok: false, reason: fail.reason } as const;
     } catch {
-        return { ok: false, reason: "Timeout" } as const;
+      return { ok: false, reason: String(e) } as const;
     }
   }
 }
 
 export function setSelectionViaBridge(selection: { start: number; end: number }) {
   sendToBridge({ type: "SET_SELECTION", selection });
-}
-
-export function syncWithBridge(macros: any[], enabled: boolean) {
-  sendToBridge({ type: "SET_MACROS", macros });
-  sendToBridge({ type: "SET_ENABLED", enabled });
 }
