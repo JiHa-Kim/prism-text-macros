@@ -72,7 +72,7 @@ export const serializeMacros = (macros: Macro[]): string => {
     const replaceStr = typeof m.replacement === 'function' ? m.replacement.toString() : JSON.stringify(m.replacement);
 
     // Build the macro object string with proper indentation
-    let lines = [
+    const lines = [
       `    {`,
       `        "trigger": ${triggerStr},`,
       `        "replacement": ${replaceStr},`,

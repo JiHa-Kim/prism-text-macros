@@ -475,7 +475,7 @@ export const defaultSnippets: Macro[] = [
                 1
             ];
 
-		let arr: number[][] = [];
+		const arr: number[][] = [];
 		for (let j = 0; j < n; j++) {
 			arr[j
                 ] = [];

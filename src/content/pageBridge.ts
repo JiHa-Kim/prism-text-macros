@@ -93,20 +93,20 @@ function hydrateBridgeMacros(inMacros: BridgeMacro[]): Macro[] {
 let enabled = true;
 let macros: Macro[] = expandMacros(defaultSnippets);
 
-let attachedEditors = new WeakSet<any>();
-let pendingModelEditors = new WeakSet<any>();
+const attachedEditors = new WeakSet<any>();
+const pendingModelEditors = new WeakSet<any>();
 
-let lastCursorOffsetByEditor = new WeakMap<any, number>();
+const lastCursorOffsetByEditor = new WeakMap<any, number>();
 
-let applyingByEditor = new WeakMap<any, boolean>();
-let scheduledByEditor = new WeakMap<any, boolean>();
-let scheduledVersionByEditor = new WeakMap<any, number>();
+const applyingByEditor = new WeakMap<any, boolean>();
+const scheduledByEditor = new WeakMap<any, boolean>();
+const scheduledVersionByEditor = new WeakMap<any, number>();
 
 type ActiveMacroState = {
   stops: TabStop[]; // absolute offsets
   idx: number;      // current stop index (0-based)
 };
-let activeMacroByEditor = new WeakMap<any, ActiveMacroState | null>();
+const activeMacroByEditor = new WeakMap<any, ActiveMacroState | null>();
 
 function getCursorOffset(ed: any, model: any) {
   const sel = ed.getSelection?.();
@@ -174,7 +174,7 @@ function attachEditor(ed: any, monaco: any) {
       const state = activeMacroByEditor.get(ed);
       if (!state || state.stops.length === 0) return;
 
-      let next = state.idx + dir;
+      const next = state.idx + dir;
       if (next >= state.stops.length || next < 0) {
         activeMacroByEditor.set(ed, null);
         return;

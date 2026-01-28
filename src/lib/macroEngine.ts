@@ -249,7 +249,7 @@ export const processReplacement = (
   }
 
   let clean = "";
-  let tabStopsMap: Record<number, TabStop> = {};
+  const tabStopsMap: Record<number, TabStop> = {};
 
   let i = 0;
   while (i < raw.length) {
