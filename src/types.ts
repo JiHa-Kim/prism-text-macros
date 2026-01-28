@@ -9,6 +9,11 @@ export interface Macro {
   jsName?: string;
 }
 
+export interface TabStop {
+  start: number;
+  end: number;
+}
+
 export interface EditorState {
   content: string;
   cursorPosition: number;

@@ -261,7 +261,14 @@ macroList.addEventListener('click', (e) => {
 // Load macros from storage
 const load = async () => {
   try {
-    const data = await chrome.storage.sync.get(["snips"]);
+    let data = await chrome.storage.local.get(["snips"]);
+    
+    // Fallback to sync if local is empty (migration path)
+    if (!data.snips) {
+        console.log("No local macros found, checking sync storage...");
+        data = await chrome.storage.sync.get(["snips"]);
+    }
+
     if (data.snips && Array.isArray(data.snips)) {
       allMacros = data.snips.map((m: any) => ({
         ...m,
@@ -298,7 +305,7 @@ const saveMacros = async () => {
           };
         });
     
-        await chrome.storage.sync.set({ snips: jsonToStore });
+        await chrome.storage.local.set({ snips: jsonToStore });
         box.value = serializeMacros(allMacros);
     } catch (e: any) {
         showStatus("Error: " + e.message, 'error');
@@ -344,7 +351,11 @@ saveAdvancedBtn.addEventListener('click', async () => {
 
 resetBtn.addEventListener('click', async () => {
     if (confirm("Reset to default snippets? This will overwrite your changes.")) {
-        allMacros = JSON.parse(JSON.stringify(defaultSnippets));
+        allMacros = defaultSnippets.map(m => ({
+            ...m,
+            // Ensure unique IDs for the new set
+            id: m.id || Math.random().toString(36).substr(2, 9) 
+        }));
         await saveMacros();
         renderMacroList();
         showStatus("Reset to defaults.");

@@ -1,5 +1,5 @@
 
-import { Macro } from './types';
+import { Macro, TabStop } from './types';
 
 /**
  * Determines if the cursor is currently inside a LaTeX math environment.
@@ -173,10 +173,7 @@ const isInsideMath = (text: string, cursorIndex: number): boolean => {
 
 
 
-export interface TabStop {
-  start: number;
-  end: number;
-}
+
 
 export interface MacroResult {
   text: string;

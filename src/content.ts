@@ -1,5 +1,5 @@
-import { Macro } from './types';
-import { checkMacroTrigger } from './macroEngine';
+import { Macro, TabStop } from './types';
+import { checkMacroTrigger, MacroMatch } from './macroEngine';
 import { expandMacros } from './macroUtils';
 import { defaultSnippets } from './defaultSnippets';
 import { BRIDGE_CHANNEL, MacroBridgeRequest, MacroBridgeResponse } from './protocol';
@@ -7,6 +7,14 @@ import { BRIDGE_CHANNEL, MacroBridgeRequest, MacroBridgeResponse } from './proto
 // State
 let enabled = true;
 let macros: Macro[] = expandMacros(defaultSnippets);
+
+// Tabstop State
+interface ActiveMacroState {
+    tabStops: TabStop[];
+    currentStopIndex: number; // -1 means no tabstop active yet (e.g. just placed), or finished
+    startOffset: number; // The absolute index where the macro started (trigger start)
+}
+let activeMacro: ActiveMacroState | null = null;
 
 // Registry for function replacers
 const functionRegistry: Record<string, (match: any) => string> = {
@@ -27,24 +35,31 @@ const functionRegistry: Record<string, (match: any) => string> = {
 };
 
 // Load initial state
-chrome.storage.sync.get(["snips"], (result) => {
-  if (result.snips && Array.isArray(result.snips)) {
-    macros = result.snips.map((m: any) => {
-        // Hydrate Regex
-        if (m.isRegex && typeof m.trigger === 'string') {
-            try {
-                return { ...m, trigger: new RegExp(m.trigger) };
-            } catch { return m; }
+const loadMacros = (storageArea: chrome.storage.StorageArea) => {
+    storageArea.get(["snips"], (result) => {
+        if (result.snips && Array.isArray(result.snips)) {
+            macros = result.snips.map((m: any) => {
+                // Hydrate Regex
+                if (m.isRegex && typeof m.trigger === 'string') {
+                    try {
+                        return { ...m, trigger: new RegExp(m.trigger) };
+                    } catch { return m; }
+                }
+                // Hydrate Functions via Registry
+                if (m.isFunc && m.jsName && functionRegistry[m.jsName]) {
+                    return { ...m, replacement: functionRegistry[m.jsName] };
+                }
+                // Fallback or skip unsafe functions
+                return m;
+            });
+        } else if (storageArea === chrome.storage.local) {
+             // Fallback to sync if local was empty
+             loadMacros(chrome.storage.sync);
         }
-        // Hydrate Functions via Registry
-        if (m.isFunc && m.jsName && functionRegistry[m.jsName]) {
-             return { ...m, replacement: functionRegistry[m.jsName] };
-        }
-        // Fallback or skip unsafe functions
-        return m;
     });
-  }
-});
+};
+
+loadMacros(chrome.storage.local);
 
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === "TOGGLE_STATE") {
@@ -149,13 +164,25 @@ const getFallbackEditorState = (el: HTMLElement): { text: string, cursor: number
 
   const sel = window.getSelection();
   let cursor = 0;
-  if (sel && sel.rangeCount > 0) cursor = sel.focusOffset;
+  if (sel && sel.rangeCount > 0) {
+      // Very naive text offset calculation for contentEditable
+      // Ideally we would walk the DOM to find exact offset, 
+      // but for many simple editors, innerText length might suffice or be slightly off.
+      // A robust implementation requires a full DOM walker.
+      // For now, we trust innerText or value.
+      const range = sel.getRangeAt(0);
+      const preCaretRange = range.cloneRange();
+      preCaretRange.selectNodeContents(el);
+      preCaretRange.setEnd(range.endContainer, range.endOffset);
+      cursor = preCaretRange.toString().length;
+  }
+  
   return { text: el.innerText || (el as any).value || "", cursor };
 };
 
 // Helper to apply replacement (Fallback)
-const applyFallbackReplacement = (el: HTMLElement, match: any) => {
-  const { replacementText, triggerRange, selection } = match;
+const applyFallbackReplacement = (el: HTMLElement, match: MacroMatch) => {
+  const { replacementText, triggerRange, selection, tabStops } = match;
   const ec = (el as any).editContext;
   
   if (ec) {
@@ -204,6 +231,13 @@ const applyFallbackReplacement = (el: HTMLElement, match: any) => {
         data: replacementText,
         bubbles: true
       }));
+
+      // Update State
+      activeMacro = {
+          tabStops: tabStops || [],
+          currentStopIndex: -1, // selection is often $0 or initial position, real tab stops are next
+          startOffset: triggerRange.start
+      };
       return;
     } catch (e) {
       console.error("Prism Macro Debug: EditContext replacement failed", e);
@@ -212,11 +246,35 @@ const applyFallbackReplacement = (el: HTMLElement, match: any) => {
 
   if (el.tagName === "DIV" || (el as HTMLElement).contentEditable === 'true') {
     el.focus();
+    const sel = window.getSelection();
+    if (sel) {
+        // Critical Fix: Select the trigger text BACKWARDS so we overwrite it
+        // 1. Collapse to end (caret)
+        // 2. Extend back by trigger length
+        const triggerLen = triggerRange.end - triggerRange.start;
+        // This relies on the browser selection modification 
+        // which might not be character-exact in complex DOM, but usually works for simple text
+        for (let i = 0; i < triggerLen; i++) {
+           sel.modify('extend', 'backward', 'character');
+        }
+        
+        // Note: We might want to verify the text content matches trigger here?
+        // const selectedText = sel.toString();
+        // if (selectedText !== ...)
+    }
+
     try {
       document.execCommand("insertText", false, replacementText);
     } catch (e) {
       console.error("Prism Macro Debug: ContentEditable replacement failed", e);
     }
+    
+    // Setup Tabstops
+    activeMacro = {
+        tabStops: tabStops || [],
+        currentStopIndex: -1,
+        startOffset: triggerRange.start
+    };
     return;
   }
 
@@ -233,6 +291,12 @@ const applyFallbackReplacement = (el: HTMLElement, match: any) => {
     input.setSelectionRange(selection.start, selection.end);
     input.scrollTop = scrollTop;
     input.dispatchEvent(new Event('input', { bubbles: true }));
+
+    activeMacro = {
+        tabStops: tabStops || [],
+        currentStopIndex: -1,
+        startOffset: triggerRange.start
+    };
   } else {
     el.innerText = replacementText;
   }
@@ -276,6 +340,13 @@ const handleMacroExpansion = async (el: HTMLElement) => {
                 if (!res.ok) {
                     console.warn("Prism Macro Debug: Bridge apply failed, falling back", res.reason);
                     applyFallbackReplacement(el, match);
+                } else {
+                    // Correctly set state for Bridge case too
+                    activeMacro = {
+                        tabStops: match.tabStops || [],
+                        currentStopIndex: -1,
+                        startOffset: match.triggerRange.start
+                    };
                 }
             } else {
                 applyFallbackReplacement(el, match);
@@ -316,14 +387,68 @@ document.addEventListener("focusin", (e) => {
   }
 });
 
+const handleTabKey = (e: KeyboardEvent, el: HTMLElement) => {
+    if (!activeMacro || activeMacro.tabStops.length === 0) return false;
+
+    // Shift+Tab goes back, Tab goes forward
+    const direction = e.shiftKey ? -1 : 1;
+    let nextIndex = activeMacro.currentStopIndex + direction;
+
+    // Bounds check
+    if (nextIndex >= activeMacro.tabStops.length) {
+        // Exit active macro mode if we go past the end
+        activeMacro = null;
+        return false; // Allow default tab behavior (maybe?) or just stop
+    }
+    if (nextIndex < 0) {
+        nextIndex = 0; // Wrap or stay? Let's stay at 0
+    }
+
+    const nextStop = activeMacro.tabStops[nextIndex];
+    activeMacro.currentStopIndex = nextIndex;
+
+    const absStart = activeMacro.startOffset + nextStop.start;
+    const absEnd = activeMacro.startOffset + nextStop.end;
+
+    // Select the tab stop
+    if (el.tagName === "TEXTAREA" || el.tagName === "INPUT") {
+        const input = el as HTMLInputElement | HTMLTextAreaElement;
+        input.setSelectionRange(absStart, absEnd);
+    } else if (el.tagName === "DIV" || (el as HTMLElement).contentEditable === 'true') {
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount > 0) {
+            // This is tricky in contentEditable without a full DOM mapper
+            // We'll try a heuristic: collapse and move
+            // But 'move' by character count is hard if we don't know current position exactly
+            // For now, let's assume we are replacing selection?
+            // Actually, we can't easily jump to absolute index in contentEditable without traversing nodes.
+            // Simplified approach: Clear selection and try to select (risky)
+            console.warn("Prism Macro: Tab navigation in contentEditable is approximate/experimental");
+            // NOTE: Robust implementation requires saving Range objects or using a DOM library
+        }
+    }
+    
+    // Prevent inserting a literal tab
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    return true;
+};
+
 document.addEventListener("keydown", (e) => {
-  if (!enabled || isExpanding) return;
+  if (!enabled) return;
   const el = document.activeElement as HTMLElement;
   if (!isEditable(el)) return;
 
-  if (["Control", "Alt", "Meta", "Shift", "CapsLock", "Tab", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) {
+  if (e.key === "Tab") {
+      if (handleTabKey(e, el)) return;
+  }
+
+  if (["Control", "Alt", "Meta", "Shift", "CapsLock", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Backspace", "Delete"].includes(e.key)) {
+    // Maybe verify if we moved cursor out of bounds -> clear activeMacro?
     return;
   }
+  
+  if (isExpanding) return;
 
   // Keydown triggers after the character is inserted (usually) or we wait
   // For better Monaco sync, we wait a tiny bit
@@ -338,4 +463,4 @@ document.addEventListener("input", (e) => {
   handleMacroExpansion(el);
 });
 
-console.log("Prism Text Macros Loaded v0.2.0 (Monaco Bridge Enabled)");
+console.log("Prism Text Macros Loaded v0.2.1 (Fix+Tabs)");
