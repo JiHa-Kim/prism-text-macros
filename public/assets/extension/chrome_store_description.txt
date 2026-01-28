@@ -1,4 +1,4 @@
-Prism Text Macros brings powerful, text-expansion capabilities to web-based Monaco editors, specifically optimized for OpenAI Prism and similar environments.
+Prism Text Macros brings powerful, text-expansion capabilities to Prism, OpenAI's AI-powered LaTeX editor.
 
 This project is inspired by the macros in the Obsidian LaTeX Suite plugin: https://github.com/artisticat1/obsidian-latex-suite.
 

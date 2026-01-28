@@ -1,16 +1,23 @@
-# Prism Text Macros
+Prism Text Macros brings powerful, text-expansion capabilities to Prism, OpenAI's AI-powered LaTeX editor.
 
-To install dependencies:
+This project is inspired by the macros in the Obsidian LaTeX Suite plugin: https://github.com/artisticat1/obsidian-latex-suite.
 
-```bash
-bun install
-```
+Do you miss the speed of your local editor when working in the browser? Prism Text Macros bridges that gap by adding seamless, Obsidian-style macro expansion to your web workflow.
 
-To run:
+Key Features:
 
-```bash
-bun run index.ts
-```
-## Documentation
+* Universal Text Macros: Define custom text replacements for frequent phrases, code blocks, or boilerplate. Type a short trigger, press Tab (or your configured key), and watch it expand instantly.
+* Works with OpenAI Prism: Designed to integrate perfectly with the Prism editor environment, ensuring your workflow remains uninterrupted.
+* LaTeX Math Support: Specialized snippets for technical writing. Type "mk" for inline math, "sq" for square roots, and more to drastically speed up scientific notation.
+* Smart Expansion: The engine respects the editor's state, preserving syntax highlighting and undo history. It feels native, not like a hacky overlay.
+* Obsidian Compatible: If you use Obsidian for note-taking, you'll feel right at home with the familiar snippet syntax and behavior.
 
-For a list of supported LaTeX macros and syntax, check out the [Obsidian LaTeX Suite cheatsheet](https://github.com/artisticat1/obsidian-latex-suite?tab=readme-ov-file#cheatsheet).
+How to Use:
+1. Install: Add the extension to Chrome.
+2. Navigate: Go to a supported site like prism.openai.com.
+3. Type: Enter a trigger (e.g., ";hello" or "mk") and press the expansion key.
+4. Configure: Click the extension icon to open the Options page, where you can add, remove, or customize your own macros.
+5. Learn: Check out our documentation and cheatsheet at https://github.com/artisticat1/obsidian-latex-suite?tab=readme-ov-file#cheatsheet
+
+Privacy & Security:
+This extension operates entirely locally. It does not collect, store, or transmit any of your personal data, keystrokes, or code. Your macros are saved securely in your browser's local storage.
