@@ -10,8 +10,7 @@
   },
   "permissions": [
     "storage",
-    "activeTab",
-    "scripting"
+    "activeTab"
   ],
   "host_permissions": [
     "https://prism.openai.com/*"
