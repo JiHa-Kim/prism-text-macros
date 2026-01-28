@@ -1,11 +1,12 @@
 import { Macro } from './types';
 import { checkMacroTrigger } from './macroEngine';
+import { expandMacros } from './macroUtils';
 import { defaultSnippets } from './defaultSnippets';
 import { BRIDGE_CHANNEL, MacroBridgeRequest, MacroBridgeResponse } from './protocol';
 
 // State
 let enabled = true;
-let macros: Macro[] = defaultSnippets;
+let macros: Macro[] = expandMacros(defaultSnippets);
 
 // Registry for function replacers
 const functionRegistry: Record<string, (match: any) => string> = {

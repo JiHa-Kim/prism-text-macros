@@ -263,10 +263,8 @@ export const processReplacement = (
     i++;
   }
 
-  // Sort tabstops: 1, 2, ..., 0 (where $0 is usually the final position)
+  // Sort tabstops: natural order (0 is first if it appears first in sequence)
   const sortedIds = Object.keys(tabStopsMap).map(Number).sort((a, b) => {
-    if (a === 0) return 1;
-    if (b === 0) return -1;
     return a - b;
   });
 
@@ -360,7 +358,36 @@ export const checkMacroTrigger = (
 
     if (matchText) {
       const replacementArgs = match ? (typeof macro.replacement === 'function' ? match : match.slice(1)) : [];
-      const { text: replacementText, selection, tabStops } = processReplacement(macro, replacementArgs as string[]);
+      let { text: replacementText, selection, tabStops } = processReplacement(macro, replacementArgs as string[]);
+
+      // Check for auto-close duplication
+      // If replacement ends with a closing char (}, ], )) and the next char in text is that char,
+      // and the trigger didn't include it, we might want to skip outputting it.
+      const closingPairs = [
+          { open: '{', close: '}' },
+          { open: '[', close: ']' },
+          { open: '(', close: ')' },
+      ];
+
+      const nextChar = text[cursorIndex];
+      const lastChar = replacementText.slice(-1);
+      
+      // Heuristic: Only dedup if the replacementText is short (like "{}") or simple wrapper
+      // preventing aggressive dedup on complex macros.
+      const pair = closingPairs.find(p => p.close === lastChar);
+      if (pair && nextChar === pair.close) {
+           // We remove the last char from replacement
+           replacementText = replacementText.slice(0, -1);
+           
+           // Adjust selection and tabStops if they were at the very end
+           const clamp = (val: number) => Math.min(val, replacementText.length);
+           selection.start = clamp(selection.start);
+           selection.end = clamp(selection.end);
+           tabStops.forEach(ts => {
+               ts.start = clamp(ts.start);
+               ts.end = clamp(ts.end);
+           });
+      }
 
       const triggerStart = cursorIndex - matchText.length;
       const offsetRange = (ts: TabStop) => ({
