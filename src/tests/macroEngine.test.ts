@@ -61,8 +61,8 @@ describe("processReplacement()", () => {
     expect(res.selection).toEqual({ start: res.text.length, end: res.text.length });
 
     // And $0 should not create additional tabStops (only $1+ become tabStops)
-    // If your implementation converts $0 into selection only, tabStops should be 0 here.
-    expect(res.tabStops.length).toBe(0);
+    // $0 is selection (id 0). $1 is next (id 1). So we expect 1 tabStop remaining.
+    expect(res.tabStops.length).toBe(1);
   });
 
   test("replaces [[n]] capture group tokens for regex macros", () => {

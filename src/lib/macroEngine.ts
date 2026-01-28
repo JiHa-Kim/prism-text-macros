@@ -36,13 +36,21 @@ export const hydrateMacros = (raw: any[]): Macro[] => {
   });
 };
 
+enum LatexMode {
+  NON_MATH = 1 << 0,
+  INLINE_MATH = 1 << 1,
+  BLOCK_MATH = 1 << 2,
+  CODE = 1 << 3,
+}
+
 /**
- * LaTeX parser to track math mode state.
+ * LaTeX parser to track math mode and code block state.
  * This is a lightweight state machine that tries to do "good enough" detection near the cursor.
  */
 class LaTeXState {
   inMath = false; // $...$ or \(...\)
   inDisplay = false; // $$...$$ or \[...\]
+  inCode = false; // ```...``` or `...`
   envStack: string[] = [];
   inTextCommandStack: number[] = [];
   braceDepth = 0;
@@ -76,12 +84,17 @@ class LaTeXState {
     "tcblisting",
   ]);
 
-  isMathMode() {
-    return (this.inMath || this.inDisplay || this.envStack.length > 0) && this.inTextCommandStack.length === 0;
+  getMode(): LatexMode {
+    if (this.inCode) return LatexMode.CODE;
+    if (this.inTextCommandStack.length > 0) return LatexMode.NON_MATH;
+    if (this.inDisplay || this.envStack.length > 0) return LatexMode.BLOCK_MATH;
+    if (this.inMath) return LatexMode.INLINE_MATH;
+    return LatexMode.NON_MATH;
   }
 
   process(text: string, index: number): number {
     const char = text[index];
+    const nextChar = text[index + 1] || "";
 
     if (this.inComment) {
       if (char === "\n") this.inComment = false;
@@ -91,6 +104,22 @@ class LaTeXState {
       this.inComment = true;
       return 0;
     }
+
+    // Code blocks ```...``` or `...`
+    if (char === "`") {
+      const isTriple = nextChar === "`" && text[index + 2] === "`";
+      if (isTriple) {
+        this.inCode = !this.inCode;
+        return 2; // skip the extra two backticks
+      } else if (!this.inCode && !this.inMath && !this.inDisplay) {
+        // Simple heuristic for inline code: only if not already in code/math
+        // We don't perfectly track matching single backticks across entire file,
+        // but this helps skip some things.
+        // For simplicity, let's just prioritize triple backticks as "Code Mode".
+      }
+    }
+
+    if (this.inCode) return 0;
 
     const ignoring = this.ignoreEnvStack.length > 0;
 
@@ -239,9 +268,9 @@ class LaTeXState {
   }
 }
 
-const isInsideMath = (text: string, cursorIndex: number): boolean => {
+const getCurrentMode = (text: string, cursorIndex: number): LatexMode => {
   const parser = new LaTeXState();
-  const startIdx = Math.max(0, cursorIndex - 2000);
+  const startIdx = Math.max(0, cursorIndex - 4000); // larger window for code blocks
   const localText = text.slice(startIdx, cursorIndex);
 
   for (let i = 0; i < localText.length; i++) {
@@ -249,7 +278,7 @@ const isInsideMath = (text: string, cursorIndex: number): boolean => {
     i += skip;
   }
 
-  return parser.isMathMode();
+  return parser.getMode();
 };
 
 export interface MacroResult {
@@ -333,6 +362,11 @@ export const processReplacement = (
     // Placeholder parsing ($n or ${n:default})
     if (char === "$") {
       const sub = raw.slice(i);
+      
+      // ${VISUAL} handling (if not handled by simple split)
+      // The split logic above: raw = raw.split("${VISUAL}").join(visualContent);
+      // should have already handled ${VISUAL} BEFORE this loop if it was a string replacement.
+      // However, if we missed it or if it's inside a function return etc.
 
       // ${1:default}
       const complexMatch = sub.match(/^\$\{(\d+):([^}]*)\}/);
@@ -405,30 +439,72 @@ export const checkMacroTrigger = (
   cursorIndex: number,
   macros: Macro[],
   forceMath: boolean = false,
-  checkAuto: boolean = false
+  checkAuto: boolean = false,
+  visualContent: string = ""
 ): MacroMatch | null => {
   const textBeforeCursor = text.slice(0, cursorIndex);
-  const inMath = forceMath || isInsideMath(text, cursorIndex);
+  const textAfterCursor = text.slice(cursorIndex);
+  const mode = forceMath ? LatexMode.BLOCK_MATH : getCurrentMode(text, cursorIndex);
 
   const candidateMacros = macros
     .map((m, i) => ({ ...m, originalIndex: i }))
     .filter((m) => {
       const options = m.options || "";
       const isAuto = options.includes("A");
-      const modeMath = options.includes("m") || options.includes("M");
-      const modeText = options.includes("t") || options.includes("n");
+      
+      const optText = options.includes("t");
+      const optMath = options.includes("m");
+      const optInline = options.includes("n");
+      const optBlock = options.includes("M");
+      const optVisual = options.includes("v");
+      const optCode = options.includes("c");
+      const optWord = options.includes("w");
 
       if (checkAuto && !isAuto) return false;
-      if (modeMath && !inMath) return false;
-      if (modeText && inMath) return false;
 
-      // VISUAL macros require selection handling elsewhere; do not auto-expand them here
-      if (typeof m.replacement === "string" && m.replacement.includes("${VISUAL}")) return false;
+      // Mode filtering
+      if (optCode) {
+        if (mode !== LatexMode.CODE) return false;
+      } else if (mode === LatexMode.CODE) {
+        // Snippets don't run in code mode unless they have 'c'
+        return false;
+      }
 
-      // Word boundary option 'w' for string triggers
-      if (options.includes("w") && typeof m.trigger === "string") {
-        const charBefore = textBeforeCursor[textBeforeCursor.length - m.trigger.length - 1];
-        if (charBefore && /[a-zA-Z0-9]/.test(charBefore)) return false;
+      if (optText && mode !== LatexMode.NON_MATH) return false;
+      if (optMath && !(mode === LatexMode.INLINE_MATH || mode === LatexMode.BLOCK_MATH)) return false;
+      if (optInline && mode !== LatexMode.INLINE_MATH) return false;
+      if (optBlock && mode !== LatexMode.BLOCK_MATH) return false;
+
+      // Visual context check
+      // For 'v' option: "Only run this snippet on a selection. The trigger should be a single character"
+      if (optVisual) {
+        if (!visualContent) return false;
+        // Spec says trigger should be single char. If we have a string trigger, check length.
+        if (typeof m.trigger === 'string' && m.trigger.length !== 1) return false;
+        // If it's a regex, we still check it below, but 'v' implies we are typing over a selection.
+      } else {
+        // If NO 'v' option, we still support ${VISUAL} but it's optional? 
+        // Or if it HAS ${VISUAL} but no 'v' option, we still require visualContent?
+        // Let's stick to the spec: 'v' allows visual.
+        // If it lacks 'v' but has ${VISUAL} in replacement, we still require visualContent.
+        const hasVisualPlaceholder = typeof m.replacement === "string" && m.replacement.includes("${VISUAL}");
+        if (hasVisualPlaceholder && !visualContent) return false;
+      }
+
+      // Word boundary option 'w'
+      if (optWord) {
+        const triggerLen = typeof m.trigger === "string" ? m.trigger.length : 0; // Regex trigger 'w' is harder to check trigger length before match
+        // We'll refine this inside the loop if it's a regex.
+        if (typeof m.trigger === "string") {
+            const charBefore = textBeforeCursor[textBeforeCursor.length - triggerLen - 1];
+            const charAfter = textAfterCursor[0];
+            const isDelimiter = (c: string) => !c || /[^a-zA-Z0-9]/.test(c);
+
+            if (!isDelimiter(charBefore)) return false;
+            // Shorthand for "followed by word delimiter": since we just typed it, 
+            // charAfter is often empty or a delimiter.
+            if (!isDelimiter(charAfter)) return false;
+        }
       }
 
       return true;
@@ -458,7 +534,21 @@ export const checkMacroTrigger = (
         const flags = macro.trigger instanceof RegExp ? macro.trigger.flags : "";
         const anchored = new RegExp(`${pattern}$`, flags);
         match = anchored.exec(textBeforeCursor);
-        if (match) matchText = match[0];
+        if (match) {
+          matchText = match[0];
+          
+          // Refined word boundary for regex
+          if ((macro.options || "").includes("w")) {
+            const startIdx = textBeforeCursor.length - matchText.length;
+            const charBefore = startIdx > 0 ? textBeforeCursor[startIdx - 1] : "";
+            const charAfter = textAfterCursor[0];
+            const isDelimiter = (c: string) => !c || /[^a-zA-Z0-9]/.test(c);
+            if (!isDelimiter(charBefore) || !isDelimiter(charAfter)) {
+              match = null;
+              matchText = "";
+            }
+          }
+        }
       } catch (e) {
         console.warn("Regex macro failed", e);
       }
@@ -476,7 +566,8 @@ export const checkMacroTrigger = (
 
     let { text: replacementText, selection, tabStops, snippetText } = processReplacement(
       macro,
-      replacementArgs as any
+      replacementArgs as any,
+      visualContent
     );
 
     // Small dedup heuristic for closing pairs: if replacement ends with a close brace/paren/bracket

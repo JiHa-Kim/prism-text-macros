@@ -97,6 +97,7 @@ const attachedEditors = new WeakSet<any>();
 const pendingModelEditors = new WeakSet<any>();
 
 const lastCursorOffsetByEditor = new WeakMap<any, number>();
+const lastSelectedTextByEditor = new WeakMap<any, string>();
 
 const applyingByEditor = new WeakMap<any, boolean>();
 const scheduledByEditor = new WeakMap<any, boolean>();
@@ -112,6 +113,12 @@ function getCursorOffset(ed: any, model: any) {
   const sel = ed.getSelection?.();
   if (!sel) return 0;
   return model.getOffsetAt(sel.getEndPosition());
+}
+
+function getSelectedText(ed: any, model: any) {
+  const sel = ed.getSelection?.();
+  if (!sel || sel.isEmpty()) return "";
+  return model.getValueInRange(sel);
 }
 
 function setSelectionByOffsets(ed: any, model: any, monaco: any, start: number, end: number) {
@@ -142,6 +149,7 @@ function attachEditor(ed: any, monaco: any) {
   attachedEditors.add(ed);
 
   lastCursorOffsetByEditor.set(ed, getCursorOffset(ed, model));
+  lastSelectedTextByEditor.set(ed, getSelectedText(ed, model));
   activeMacroByEditor.set(ed, null);
 
   // Track cursor changes
@@ -149,6 +157,12 @@ function attachEditor(ed: any, monaco: any) {
     const m = ed.getModel?.();
     if (!m) return;
     lastCursorOffsetByEditor.set(ed, getCursorOffset(ed, m));
+    // We only update the tracked selection if it's non-empty,
+    // so that when we type over it (making it empty), we still have the last "real" selection.
+    const selText = getSelectedText(ed, m);
+    if (selText) {
+      lastSelectedTextByEditor.set(ed, selText);
+    }
   });
 
   // IME composition handling via textarea
@@ -172,7 +186,7 @@ function attachEditor(ed: any, monaco: any) {
   // } catch { ... }
 
   // Main expansion loop
-  ed.onDidChangeModelContent?.(() => {
+  ed.onDidChangeModelContent?.((e: any) => {
     if (!enabled) return;
     if (applyingByEditor.get(ed)) return;
     if (inComposition) return;
@@ -181,6 +195,32 @@ function attachEditor(ed: any, monaco: any) {
     if (!m) return;
 
     lastCursorOffsetByEditor.set(ed, getCursorOffset(ed, m));
+
+    // Determine if we just typed over a selection
+    // If we did, valid visualContent should be available
+    let visualContent = "";
+    // Heuristic: if the change replaced a non-empty range, we use the last known selection
+    // Actually, onDidChangeModelContent happens AFTER the change.
+    // But we tracked the selection in onDidChangeCursorSelection BEFORE the change.
+    // So if the change event says we replaced text, we use the tracked text.
+    
+    // Check if any change in the event had a length > 0 (meaning something was replaced)
+    let isReplacement = false;
+    if (e.changes) {
+      for (const change of e.changes) {
+        if (change.rangeLength > 0) {
+          isReplacement = true;
+          break;
+        }
+      }
+    }
+
+    if (isReplacement) {
+      visualContent = lastSelectedTextByEditor.get(ed) || "";
+    } else {
+      // If just typing, clear the visual content so we don't accidentally trigger visual macros
+      lastSelectedTextByEditor.set(ed, "");
+    }
 
     if (scheduledByEditor.get(ed)) return;
     scheduledByEditor.set(ed, true);
@@ -203,7 +243,7 @@ function attachEditor(ed: any, monaco: any) {
       const cursor = getCursorOffset(ed, mm);
       const text = mm.getValue(); 
       
-      const match = checkMacroTrigger(text, cursor, macros);
+      const match = checkMacroTrigger(text, cursor, macros, false, false, visualContent);
       if (!match) return;
 
       applyingByEditor.set(ed, true);
@@ -238,6 +278,9 @@ function attachEditor(ed: any, monaco: any) {
         // IMPORTANT: do not set activeMacroByEditor here anymore.
         // Let Monaco manage snippet placeholders and Tab.
         activeMacroByEditor.set(ed, null);
+        
+        // Clear visual content after successful expansion so it doesn't persist
+        lastSelectedTextByEditor.set(ed, "");
 
       } finally {
         applyingByEditor.set(ed, false);
