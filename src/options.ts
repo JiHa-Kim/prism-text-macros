@@ -49,8 +49,8 @@ const renderMacroList = (filter: string = '') => {
         <div class="macro-description">${m.description || 'No description'}</div>
       </div>
       <div class="macro-actions">
-        <button class="action-btn edit-btn" data-index="${index}" title="Edit">✎</button>
-        <button class="action-btn delete-btn delete" data-index="${index}" title="Delete">🗑</button>
+        <button class="action-btn edit-btn" data-id="${m.id}" title="Edit">✎</button>
+        <button class="action-btn delete-btn delete" data-id="${m.id}" title="Delete">🗑</button>
       </div>
     `;
 
@@ -67,14 +67,40 @@ const renderMacroList = (filter: string = '') => {
     }, index * 30);
   });
 
-  // Add event listeners to buttons
+  // Add event listeners to buttons using IDs
+  document.querySelectorAll('.edit-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        const id = (e.currentTarget as HTMLElement).getAttribute('data-id');
+        const macro = allMacros.find(m => m.id === id);
+        if (!macro) return;
+
+        const newTrigger = prompt("Edit trigger:", macro.trigger instanceof RegExp ? macro.trigger.source : macro.trigger);
+        if (newTrigger === null) return;
+        
+        const newReplacement = prompt("Edit replacement:", typeof macro.replacement === 'function' ? macro.replacement.toString() : macro.replacement);
+        if (newReplacement === null) return;
+
+        const newDesc = prompt("Edit description:", macro.description || "");
+        if (newDesc === null) return;
+
+        macro.trigger = newTrigger;
+        macro.replacement = newReplacement;
+        macro.description = newDesc;
+
+        saveMacros();
+        renderMacroList(searchInput.value);
+        showStatus("Macro updated.");
+    });
+  });
+
   document.querySelectorAll('.delete-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
-        const idx = parseInt((e.currentTarget as HTMLElement).getAttribute('data-index') || '0');
+        const id = (e.currentTarget as HTMLElement).getAttribute('data-id');
         if (confirm("Delete this macro?")) {
-            allMacros.splice(idx, 1);
+            allMacros = allMacros.filter(m => m.id !== id);
             saveMacros();
             renderMacroList(searchInput.value);
+            showStatus("Macro deleted.");
         }
     });
   });
@@ -85,9 +111,15 @@ const load = async () => {
   try {
     const data = await chrome.storage.sync.get(["snips"]);
     if (data.snips && Array.isArray(data.snips)) {
-      allMacros = data.snips;
+      allMacros = data.snips.map((m: any) => ({
+        ...m,
+        id: m.id || Math.random().toString(36).substr(2, 9)
+      }));
     } else {
-      allMacros = defaultSnippets;
+      allMacros = (defaultSnippets as Macro[]).map(m => ({
+        ...m,
+        id: m.id || Math.random().toString(36).substr(2, 9)
+      }));
     }
     box.value = serializeMacros(allMacros);
     renderMacroList();
