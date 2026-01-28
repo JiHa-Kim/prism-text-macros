@@ -10,34 +10,40 @@ let macros: Macro[] = defaultSnippets;
 let tabStops: { el: HTMLElement, stops: number[] } | null = null;
 
 // Load initial state
+// Registry for function replacers
+const functionRegistry: Record<string, (match: any) => string> = {
+    "identity_matrix": (match: any) => {
+        const n = parseInt(match[1]);
+        if (isNaN(n)) return "";
+        let arr: number[][] = [];
+        for (let j = 0; j < n; j++) {
+            arr[j] = [];
+            for (let i = 0; i < n; i++) {
+                arr[j][i] = (i === j) ? 1 : 0;
+            }
+        }
+        let output = arr.map(el => el.join(" & ")).join(" \\\\\n");
+        output = `\\begin{pmatrix}\n${output}\n\\end{pmatrix}`;
+        return output;
+    }
+};
+
+// Load initial state
 chrome.storage.sync.get(["snips"], (result) => {
   if (result.snips && Array.isArray(result.snips)) {
-    // We need to re-hydrate Regexps if we stored them as strings
-    // See options.ts logic. 
-    // For now, let's assume if it looks like a regex source, we might need to handle it, 
-    // but 'checkMacroTrigger' handles string vs RegExp triggers. 
     macros = result.snips.map((m: any) => {
-      if (m.isRegex && typeof m.trigger === 'string') {
-        try {
-          // We probably need stored flags too if we want to be perfect, 
-          // but usually 'm' flag is used. 
-          // Let's assume standard behavior or stick to string triggers if complex.
-          return { ...m, trigger: new RegExp(m.trigger) };
-        } catch { return m; }
-      }
-      if (m.isFunc && typeof m.replacement === 'string') {
-        // DANGEROUS: new Function usage. 
-        // In MV3 content scripts, this might be blocked by CSP.
-        // If blocked, we fall back to string replacement or warn.
-        try {
-          // Try to reconstruct function. 
-          // 'm.replacement' is "function (match) { ... }" or "(match) => { ... }"
-          // We can wrap it in "return " + str?
-          const fn = new Function("return " + m.replacement)();
-          return { ...m, replacement: fn };
-        } catch (e) { console.warn("Cannot hydrate function macro", e); return m; }
-      }
-      return m;
+        // Hydrate Regex
+        if (m.isRegex && typeof m.trigger === 'string') {
+            try {
+                return { ...m, trigger: new RegExp(m.trigger) };
+            } catch { return m; }
+        }
+        // Hydrate Functions via Registry
+        if (m.isFunc && m.jsName && functionRegistry[m.jsName]) {
+             return { ...m, replacement: functionRegistry[m.jsName] };
+        }
+        // Fallback or skip unsafe functions
+        return m;
     });
   }
 });
@@ -51,9 +57,20 @@ chrome.runtime.onMessage.addListener((msg) => {
 // Utilities
 const isEditable = (el: Element | null): boolean => {
   if (!el) return false;
-  if (el.tagName === "TEXTAREA") return true;
-  if (el.tagName === "INPUT" && (el as HTMLInputElement).type === "text") return true;
-  if ((el as HTMLElement).isContentEditable) return true;
+  // Explicitly target Monaco Editor parts
+  if (el.classList.contains("native-edit-context")) return true;
+  if (el.classList.contains("ime-text-area")) return true;
+
+  // Invert logic: Ignore standard inputs explicitly to avoid chat zones
+  // unless we decide otherwise. The user wanted "opposite", so we disable these.
+  if (el.tagName === "TEXTAREA") return false;
+  if (el.tagName === "INPUT" && (el as HTMLInputElement).type === "text") return false;
+  
+  // Keep contentEditable check? Or disable it too?
+  // Use caution. Prism might use contentEditable.
+  // But strict reading of "opposite" implies checking specifically for the code editor.
+  // For now, let's strictly target the classes found in the trace.
+  
   return false;
 };
 
