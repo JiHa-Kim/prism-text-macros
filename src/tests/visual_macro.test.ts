@@ -43,19 +43,6 @@ describe("Visual Macro Expansion", () => {
 
 
   it("should trigger visual macro when visual content is provided inside inline math", () => {
-    // "some $x R" -> selection "x", cursor at end
-    // text: "some $x R"
-    // But conceptually: text="some $x$", selection="x".
-    // Wait, checkMacroTrigger logic:
-    // It takes `text` up to cursor.
-    // If we select `x` in `$x$`. cursor is after x.
-    // text = "some $x" (cursor is at end).
-    // The "R" isn't in the text yet. We type R.
-    // text becomes "some $xR".
-    // We check trigger "R".
-    // isInsideMath("some $xR", cursor) -> checks "some $xR".
-    // $ opens math. xR is inside.
-    // So it should be True.
     
     const text = "some $xR";
     const cursor = text.length;
