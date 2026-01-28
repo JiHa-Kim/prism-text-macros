@@ -20,9 +20,10 @@ const navAdvanced = document.getElementById("nav-advanced") as HTMLElement;
 
 let allMacros: Macro[] = [];
 let activeEditorId: string | null = null;
+let isAdvancedViewDirty = false;
 
 // Save macros to storage
-const saveMacros = async () => {
+const saveMacros = async (options: { skipAdvancedUpdate?: boolean } = {}) => {
     try {
         const jsonToStore = allMacros.map(m => {
           const isRegex = m.trigger instanceof RegExp;
@@ -40,10 +41,20 @@ const saveMacros = async () => {
     
         await saveMacrosToStorage(chrome.storage.local, jsonToStore as Macro[]); // cast because serialization changes types slightly?
         
-        // Notify background script to broadcast update
-        chrome.runtime.sendMessage({ type: "MACROS_UPDATED" });
+        // Notify background script to broadcast update with the data
+        chrome.runtime.sendMessage({ 
+            type: "MACROS_UPDATED", 
+            macros: jsonToStore 
+        });
         
-        box.value = serializeMacros(allMacros);
+        if (!options.skipAdvancedUpdate) {
+            if (advancedView.style.display !== 'none') {
+                box.value = serializeMacros(allMacros);
+                isAdvancedViewDirty = false;
+            } else {
+                isAdvancedViewDirty = true;
+            }
+        }
     } catch (e: any) {
         showStatus(status, "Error: " + e.message, 'error');
     }
@@ -132,7 +143,8 @@ const load = async () => {
         id: m.id || Math.random().toString(36).substr(2, 9)
     }));
     
-    box.value = serializeMacros(allMacros);
+    // box.value = serializeMacros(allMacros); // Defer until view shown
+    isAdvancedViewDirty = true; 
     renderMacroList(allMacros, macroList);
   } catch (e) {
     console.error("Load error", e);
@@ -153,7 +165,11 @@ const showAdvancedView = () => {
     advancedView.style.display = 'flex';
     navMacros.classList.remove('active');
     navAdvanced.classList.add('active');
-    box.value = serializeMacros(allMacros);
+    
+    if (isAdvancedViewDirty) {
+        box.value = serializeMacros(allMacros);
+        isAdvancedViewDirty = false;
+    }
 };
 
 navMacros.addEventListener('click', showMacrosView);
@@ -168,7 +184,7 @@ saveAdvancedBtn.addEventListener('click', async () => {
         const text = box.value;
         const parsed = parseMacros(text);
         allMacros = parsed;
-        await saveMacros();
+        await saveMacros({ skipAdvancedUpdate: true });
         showStatus(status, "Saved successfully.");
         renderMacroList(allMacros, macroList, searchInput.value);
     } catch (e: any) {
