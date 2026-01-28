@@ -436,18 +436,6 @@ export const defaultSnippets: Macro[] = [
     },
     {trigger: "abs", replacement: "|$0|$1", options: "mA"
     },
-    {trigger: "(", replacement: "(${VISUAL})", options: "mA"
-    },
-    {trigger: "[", replacement: "[${VISUAL}]", options: "mA"
-    },
-    {trigger: "{", replacement: "{${VISUAL}}", options: "mA"
-    },
-    {trigger: "(", replacement: "($0)$1", options: "mA"
-    },
-    {trigger: "{", replacement: "{$0}$1", options: "mA"
-    },
-    {trigger: "[", replacement: "[$0]$1", options: "mA"
-    },
     {trigger: "lr(", replacement: "\\left( $0 \\right) $1", options: "mA"
     },
     {trigger: "lr{", replacement: "\\left\\{ $0 \\right\\} $1", options: "mA"
