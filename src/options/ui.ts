@@ -5,6 +5,33 @@ import { Macro } from '../lib/types';
 // The original code used global consts.
 // We can export references or just accept them.
 
+const cleanLatex = (str: string) => {
+    // Remove snippet placeholders like $0, ${1}, ${1:default}
+    // And also remove tabstops $1 etc
+    return str
+        .replace(/\$\{\d+(:[^}]*)?\}/g, '$1') // ${1:default} -> default, ${1} -> ""
+        .replace(/\$\d+/g, ''); // $0, $1 -> ""
+};
+
+// Improved cleaner for preview
+const getPreviewHtml = (val: string, isMath: boolean) => {
+    // Remove snippet syntax
+    let cleaned = cleanLatex(val);
+    if (!cleaned.trim()) return '';
+
+    if (isMath) {
+        return `$${cleaned}$`;
+    } else {
+        // Escape HTML for text preview
+        return cleaned
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+};
+
 export const renderMacroList = (macros: Macro[], container: HTMLElement, filter: string = '') => {
   container.innerHTML = '';
   const filtered = macros.filter(m => {
@@ -18,12 +45,27 @@ export const renderMacroList = (macros: Macro[], container: HTMLElement, filter:
     const card = document.createElement('div');
     card.className = 'macro-card';
     
+    // Determine replacement string
+    let repStr = typeof m.replacement === 'function' ? '[Function]' : m.replacement;
+    let previewHtml = '';
+    
+    const opts = getOptionsFromStr(m.options || "mA");
+    
+    // If it looks like LaTeX, generate a preview
+    if (typeof repStr === 'string' && repStr.trim()) {
+         const content = getPreviewHtml(repStr, opts.isMath);
+         // Only add class math-content if it is math
+         const className = opts.isMath ? 'math-content' : 'code-content';
+         previewHtml = `<div class="${className}">${content}</div>`;
+    }
+
     const triggerStr = m.trigger instanceof RegExp ? m.trigger.source : m.trigger;
     
     card.innerHTML = `
       <div class="macro-info">
         <div class="macro-trigger">${triggerStr}</div>
         <div class="macro-description">${m.description || 'No description'}</div>
+        ${previewHtml ? '<div class="macro-preview-list">Preview: ' + previewHtml + '</div>' : ''}
       </div>
       <div class="macro-actions">
         <button class="action-btn edit-btn" data-id="${m.id}" title="Edit">✎</button>
@@ -37,6 +79,15 @@ export const renderMacroList = (macros: Macro[], container: HTMLElement, filter:
     card.style.transition = 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)';
     
     container.appendChild(card);
+    
+    // Only typeset if there is math content
+    const mathContent = card.querySelector('.math-content');
+    if (mathContent) {
+        const MathJax = (window as any).MathJax;
+        if (MathJax && MathJax.typesetPromise) {
+            MathJax.typesetPromise([mathContent]).catch((err: any) => console.log('MathJax list error', err));
+        }
+    }
     
     setTimeout(() => {
         card.style.opacity = '1';
@@ -62,11 +113,11 @@ export const renderEditor = (
     onCancel: () => void
 ) => {
     const isNew = !macro;
-    const opts = getOptionsFromStr(macro?.options || "mA");
+    const initialOpts = getOptionsFromStr(macro?.options || "mA");
     
     let envMode = 'any';
-    if (opts.isMath) envMode = 'math';
-    if (opts.isText) envMode = 'text';
+    if (initialOpts.isMath) envMode = 'math';
+    if (initialOpts.isText) envMode = 'text';
 
     const html = `
     <div class="macro-editor" id="editor-${isNew ? 'NEW' : macro!.id}">
@@ -84,6 +135,11 @@ export const renderEditor = (
         <div class="form-group">
             <label>Replacement</label>
             <textarea class="form-control" id="edit-replacement" placeholder="Replacement text...">${isNew ? '' : (typeof macro!.replacement === 'function' ? macro!.replacement.toString() : macro!.replacement)}</textarea>
+            
+            <div id="preview-section" style="display: none;">
+                <span class="latex-preview-label">Preview</span>
+                <div class="latex-preview-container" id="latex-preview"></div>
+            </div>
         </div>
 
         <div class="form-group">
@@ -106,15 +162,15 @@ export const renderEditor = (
 
                 <div class="checkbox-group">
                     <label class="checkbox-label">
-                        <input type="checkbox" id="opt-auto" ${opts.isAuto ? 'checked' : ''}>
+                        <input type="checkbox" id="opt-auto" ${initialOpts.isAuto ? 'checked' : ''}>
                         <span>Auto-Expand</span>
                     </label>
                     <label class="checkbox-label">
-                        <input type="checkbox" id="opt-word" ${opts.isWord ? 'checked' : ''}>
+                        <input type="checkbox" id="opt-word" ${initialOpts.isWord ? 'checked' : ''}>
                         <span>Word Boundary</span>
                     </label>
                     <label class="checkbox-label">
-                        <input type="checkbox" id="opt-regex" ${opts.isRegex ? 'checked' : ''}>
+                        <input type="checkbox" id="opt-regex" ${initialOpts.isRegex ? 'checked' : ''}>
                         <span>Regex</span>
                     </label>
                 </div>
@@ -130,7 +186,42 @@ export const renderEditor = (
 
     container.innerHTML = html;
     
-    (container.querySelector('#edit-trigger') as HTMLInputElement).focus();
+    const triggerInput = container.querySelector('#edit-trigger') as HTMLInputElement;
+    const replacementInput = container.querySelector('#edit-replacement') as HTMLTextAreaElement;
+    const previewSection = container.querySelector('#preview-section') as HTMLDivElement;
+    const previewContainer = container.querySelector('#latex-preview') as HTMLDivElement;
+    
+    // Check radio buttons for mode
+    const radioInputs = container.querySelectorAll('input[name="env-mode"]');
+
+    const updatePreview = () => {
+        const val = replacementInput.value;
+        const currentMode = (container.querySelector('input[name="env-mode"]:checked') as HTMLInputElement)?.value;
+        const isMath = currentMode === 'math';
+        
+        if (val.trim()) {
+            previewSection.style.display = 'block';
+            previewContainer.innerHTML = getPreviewHtml(val, isMath);
+            
+            if (isMath) {
+                const MathJax = (window as any).MathJax;
+                if (MathJax && MathJax.typesetPromise) {
+                    MathJax.typesetPromise([previewContainer]).catch((err: any) => {
+                        console.error('MathJax error:', err);
+                    });
+                }
+            }
+        } else {
+            previewSection.style.display = 'none';
+        }
+    };
+
+    replacementInput.addEventListener('input', updatePreview);
+    radioInputs.forEach(r => r.addEventListener('change', updatePreview));
+    
+    updatePreview();
+    
+    triggerInput.focus();
 
     container.querySelector('#cancel-edit')?.addEventListener('click', onCancel);
 

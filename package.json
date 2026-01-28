@@ -1,9 +1,7 @@
 {
   "name": "monaco-text-macros",
-  "module": "index.ts",
-  "type": "module",
   "version": "0.0.0.1",
-  "private": true,
+  "module": "index.ts",
   "devDependencies": {
     "@types/bun": "latest",
     "@types/chrome": "^0.1.36",
@@ -16,13 +14,19 @@
   "peerDependencies": {
     "typescript": "^5.9.3"
   },
+  "private": true,
   "scripts": {
-    "build": "esbuild src/background/background.ts src/content/content.ts src/options/options.ts src/content/pageBridge.ts --bundle --outdir=dist --format=esm --target=esnext --minify",
-    "dev": "esbuild src/background/background.ts src/content/content.ts src/options/options.ts src/content/pageBridge.ts --bundle --outdir=dist --format=esm --target=esnext --watch",
+    "setup": "bun run scripts/setup_libs.ts",
+    "build": "bun run setup && esbuild src/background/background.ts src/content/content.ts src/options/options.ts src/content/pageBridge.ts --bundle --outdir=dist --format=esm --target=esnext --minify",
+    "dev": "bun run setup && esbuild src/background/background.ts src/content/content.ts src/options/options.ts src/content/pageBridge.ts --bundle --outdir=dist --format=esm --target=esnext --watch",
     "package": "npm run build && powershell -Command \"Compress-Archive -Path dist, public, manifest.json -DestinationPath prism-macros-ext.zip -Force\"",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "test": "vitest run",
     "test:watch": "vitest run --watch"
+  },
+  "type": "module",
+  "dependencies": {
+    "mathjax": "3"
   }
 }
