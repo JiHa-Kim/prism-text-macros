@@ -1,15 +1,12 @@
-
 import { Macro } from './types';
-import { checkMacroTrigger, processReplacement } from './macroEngine';
+import { checkMacroTrigger } from './macroEngine';
 import { defaultSnippets } from './defaultSnippets';
-import { normalizeKeyCombo } from './keybindUtils';
+import { BRIDGE_CHANNEL, MacroBridgeRequest, MacroBridgeResponse } from './protocol';
 
 // State
 let enabled = true;
 let macros: Macro[] = defaultSnippets;
-let tabStops: { el: HTMLElement, stops: number[] } | null = null;
 
-// Load initial state
 // Registry for function replacers
 const functionRegistry: Record<string, (match: any) => string> = {
     "identity_matrix": (match: any) => {
@@ -54,6 +51,70 @@ chrome.runtime.onMessage.addListener((msg) => {
   }
 });
 
+// Bridge Logic
+function sendToBridge(req: MacroBridgeRequest) {
+  window.postMessage({ channel: BRIDGE_CHANNEL, payload: req }, "*");
+}
+
+function waitForBridgeResponse<T extends MacroBridgeResponse["type"]>(
+  type: T,
+  timeoutMs = 300
+): Promise<Extract<MacroBridgeResponse, { type: T }>> {
+  return new Promise((resolve, reject) => {
+    const t = window.setTimeout(() => {
+      window.removeEventListener("message", onMsg);
+      reject(new Error("Bridge timeout: " + type));
+    }, timeoutMs);
+
+    function onMsg(evt: MessageEvent) {
+      const data = evt.data as any;
+      if (!data || data.channel !== BRIDGE_CHANNEL) return;
+      const resp = data.payload as MacroBridgeResponse;
+      if (!resp || resp.type !== type) return;
+
+      window.clearTimeout(t);
+      window.removeEventListener("message", onMsg);
+      resolve(resp as any);
+    }
+
+    window.addEventListener("message", onMsg);
+  });
+}
+
+function injectBridgeScript() {
+  const s = document.createElement("script");
+  s.src = chrome.runtime.getURL("dist/pageBridge.js"); // We'll bundle it here
+  s.type = "text/javascript";
+  (document.head || document.documentElement).appendChild(s);
+  s.onload = () => s.remove();
+}
+
+async function getStateFromBridge() {
+  try {
+    sendToBridge({ type: "GET_STATE" });
+    const resp = await waitForBridgeResponse("STATE", 200);
+    return resp;
+  } catch (e) {
+    return { ok: false, reason: String(e) } as const;
+  }
+}
+
+async function applyEditViaBridge(edit: { start: number; end: number; text: string }, selection: { start: number; end: number }) {
+  sendToBridge({ type: "APPLY_EDIT", edit, selection });
+  try {
+    const resp = await waitForBridgeResponse("APPLY_OK", 300);
+    return { ok: true } as const;
+  } catch (e) {
+    // Check if it failed explicitly
+    try {
+        const fail = await waitForBridgeResponse("APPLY_FAIL", 50);
+        return { ok: false, reason: fail.reason } as const;
+    } catch {
+        return { ok: false, reason: "Timeout" } as const;
+    }
+  }
+}
+
 // Utilities
 const isEditable = (el: Element | null): boolean => {
   if (!el) return false;
@@ -61,15 +122,10 @@ const isEditable = (el: Element | null): boolean => {
   const tagName = el.tagName;
   const isContentEditable = (el as HTMLElement).contentEditable === 'true';
 
-  // Explicitly target Monaco Editor parts
   if (el.classList.contains("native-edit-context")) return true;
   if (el.classList.contains("ime-text-area")) return true;
   if (el.classList.contains("monaco-mouse-cursor-text")) return true;
   if (el.closest('.monaco-editor')) return true;
-
-  // CodeMirror or other common editors
-  if (el.classList.contains("CodeMirror-code")) return true;
-  if (el.closest('.CodeMirror')) return true;
 
   if (tagName === "TEXTAREA") return true;
   if (tagName === "INPUT" && (el as HTMLInputElement).type === "text") return true;
@@ -80,46 +136,34 @@ const isEditable = (el: Element | null): boolean => {
 
 let isExpanding = false;
 
-// Helper to get text and cursor from any supported element
-const getEditorState = (el: HTMLElement): { text: string, cursor: number } => {
-  // 1. EditContext (Modern Monaco)
+// Helper to get text and cursor (Fallback)
+const getFallbackEditorState = (el: HTMLElement): { text: string, cursor: number } => {
   const ec = (el as any).editContext;
-  if (ec) {
-    return { text: ec.text, cursor: ec.selectionEnd };
-  }
+  if (ec) return { text: ec.text, cursor: ec.selectionEnd };
 
-  // 2. Standard Input/Textarea
   if (el.tagName === "TEXTAREA" || el.tagName === "INPUT") {
     const input = el as HTMLInputElement | HTMLTextAreaElement;
     return { text: input.value, cursor: input.selectionEnd || 0 };
   }
 
-  // 3. ContentEditable
   const sel = window.getSelection();
   let cursor = 0;
-  if (sel && sel.rangeCount > 0) {
-    cursor = sel.focusOffset;
-  }
+  if (sel && sel.rangeCount > 0) cursor = sel.focusOffset;
   return { text: el.innerText || (el as any).value || "", cursor };
 };
 
-// Helper to apply replacement
-const applyReplacement = (el: HTMLElement, match: any) => {
+// Helper to apply replacement (Fallback)
+const applyFallbackReplacement = (el: HTMLElement, match: any) => {
   const { replacementText, triggerRange, selection } = match;
   const ec = (el as any).editContext;
   
   if (ec) {
-    console.log("Prism Macro Debug: Using EditContext.updateText + TextUpdateEvent", triggerRange.start, triggerRange.end, replacementText);
     try {
-      // 1. Update the buffer
       ec.updateText(triggerRange.start, triggerRange.end, replacementText);
       ec.updateSelection(selection.start, selection.end);
       
-      // 2. Wrap in composition events to force commitment in many editors
       el.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
       
-      // 3. Dispatch the textupdate event which is what the application actually listens to
-      // We try to use the specialized TextUpdateEvent if available, otherwise fallback to CustomEvent
       let event;
       if (typeof (window as any).TextUpdateEvent === 'function') {
         event = new (window as any).TextUpdateEvent('textupdate', {
@@ -131,7 +175,6 @@ const applyReplacement = (el: HTMLElement, match: any) => {
           bubbles: true
         });
       } else {
-        // Fallback for environments where the constructor isn't directly exposed
         event = new CustomEvent('textupdate', {
           bubbles: true,
           detail: {
@@ -142,7 +185,6 @@ const applyReplacement = (el: HTMLElement, match: any) => {
             selectionEnd: selection.end
           }
         });
-        // Manually attach properties if the application expects them on the event object
         Object.assign(event, {
             updateRangeStart: triggerRange.start,
             updateRangeEnd: triggerRange.end,
@@ -152,16 +194,15 @@ const applyReplacement = (el: HTMLElement, match: any) => {
         });
       }
       
-      ec.dispatchEvent(event);
+      el.dispatchEvent(event);
+      try { ec.dispatchEvent(event); } catch {}
       el.dispatchEvent(new CompositionEvent('compositionend', { data: replacementText, bubbles: true }));
 
-      // 4. Also dispatch a generic input event for good measure
       el.dispatchEvent(new InputEvent('input', {
         inputType: 'insertReplacementText',
         data: replacementText,
         bubbles: true
       }));
-      
       return;
     } catch (e) {
       console.error("Prism Macro Debug: EditContext replacement failed", e);
@@ -169,17 +210,9 @@ const applyReplacement = (el: HTMLElement, match: any) => {
   }
 
   if (el.tagName === "DIV" || (el as HTMLElement).contentEditable === 'true') {
-    // Monaco or generic DIV/ContentEditable
     el.focus();
-    
     try {
-      // Standard selection-based replacement for ContentEditable
-      const sel = window.getSelection();
-      if (sel && sel.rangeCount > 0) {
-        // We assume the cursor is at triggerRange.end
-        // This is a bit simplified for general ContentEditable but should work for Monaco fallback
-        document.execCommand("insertText", false, replacementText);
-      }
+      document.execCommand("insertText", false, replacementText);
     } catch (e) {
       console.error("Prism Macro Debug: ContentEditable replacement failed", e);
     }
@@ -190,19 +223,12 @@ const applyReplacement = (el: HTMLElement, match: any) => {
     const input = el as HTMLInputElement | HTMLTextAreaElement;
     const scrollTop = input.scrollTop;
     input.focus();
-    
-    const val = input.value;
-    const newVal = val.slice(0, triggerRange.start) + replacementText + val.slice(triggerRange.end);
-    
-    // We try to use execCommand first to preserve undo history
-    // But since we want surgical, we might need to select the range first
     input.setSelectionRange(triggerRange.start, triggerRange.end);
     const success = document.execCommand("insertText", false, replacementText);
-    
-    if (!success || input.value !== newVal) {
-       input.value = newVal;
+    if (!success) {
+       const val = input.value;
+       input.value = val.slice(0, triggerRange.start) + replacementText + val.slice(triggerRange.end);
     }
-    
     input.setSelectionRange(selection.start, selection.end);
     input.scrollTop = scrollTop;
     input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -211,10 +237,25 @@ const applyReplacement = (el: HTMLElement, match: any) => {
   }
 };
 
-const handleMacroExpansion = (el: HTMLElement) => {
-  if (isExpanding) return;
+const handleMacroExpansion = async (el: HTMLElement) => {
+  if (isExpanding || !enabled) return;
 
-  const { text, cursor } = getEditorState(el);
+  // 1. Try Bridge
+  const bridgeState = await getStateFromBridge();
+  let text = "", cursor = 0;
+  let useBridge = false;
+
+  if (bridgeState.ok) {
+    text = bridgeState.text;
+    cursor = bridgeState.cursor;
+    useBridge = true;
+  } else {
+    // 2. Fallback
+    const fallback = getFallbackEditorState(el);
+    text = fallback.text;
+    cursor = fallback.cursor;
+  }
+
   if (!text) return;
 
   const match = checkMacroTrigger(text, cursor, macros);
@@ -223,22 +264,31 @@ const handleMacroExpansion = (el: HTMLElement) => {
     
     isExpanding = true;
     try {
-      applyReplacement(el, match);
+      if (useBridge) {
+        const res = await applyEditViaBridge(
+          { start: match.triggerRange.start, end: match.triggerRange.end, text: match.replacementText },
+          { start: match.selection.start, end: match.selection.end }
+        );
+        if (!res.ok) {
+          console.warn("Prism Macro Debug: Bridge apply failed, falling back", res.reason);
+          applyFallbackReplacement(el, match);
+        }
+      } else {
+        applyFallbackReplacement(el, match);
+      }
     } finally {
-      // Use a timeout to ensure all events triggered by replacement are ignored
       setTimeout(() => { isExpanding = false; }, 50);
     }
   }
 };
 
 // Main Logic
+injectBridgeScript();
+
 document.addEventListener("focusin", (e) => {
   const el = e.target as HTMLElement;
-  if (el) {
-    console.log("Prism Macro Debug: Focus on", el.tagName, "Classes:", el.className, "isEditable:", isEditable(el));
-    if ((el as any).editContext) {
-      console.log("Prism Macro Debug: EditContext detected");
-    }
+  if (el && isEditable(el)) {
+    console.log("Prism Macro Debug: Focus on", el.tagName);
   }
 });
 
@@ -247,12 +297,12 @@ document.addEventListener("keydown", (e) => {
   const el = document.activeElement as HTMLElement;
   if (!isEditable(el)) return;
 
-  // Filter out modifiers and navigation keys
   if (["Control", "Alt", "Meta", "Shift", "CapsLock", "Tab", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) {
     return;
   }
 
-  // Use a small timeout to let the character be inserted first
+  // Keydown triggers after the character is inserted (usually) or we wait
+  // For better Monaco sync, we wait a tiny bit
   setTimeout(() => handleMacroExpansion(el), 10);
 }, true);
 
@@ -264,4 +314,4 @@ document.addEventListener("input", (e) => {
   handleMacroExpansion(el);
 });
 
-console.log("Prism Text Macros Loaded v0.1.2");
+console.log("Prism Text Macros Loaded v0.2.0 (Monaco Bridge Enabled)");

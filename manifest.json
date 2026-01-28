@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Prism LaTeX Snippets",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Obsidian-like LaTeX snippet expansion for prism.openai.com",
   "permissions": [
     "storage",
@@ -21,6 +21,16 @@
       ],
       "run_at": "document_idle",
       "all_frames": true
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "dist/pageBridge.js"
+      ],
+      "matches": [
+        "https://prism.openai.com/*"
+      ]
     }
   ],
   "options_ui": {
