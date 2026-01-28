@@ -52,15 +52,22 @@ export const serializeMacros = (macros: Macro[]): string => {
     const triggerStr = m.trigger instanceof RegExp ? m.trigger.toString() : JSON.stringify(m.trigger);
     const replaceStr = typeof m.replacement === 'function' ? m.replacement.toString() : JSON.stringify(m.replacement);
 
-    // Filter out internal fields like isRegex, isFunc, jsName for the JSON view if desired,
-    // or keep them for consistency. Let's keep it clean.
-    return `    {
-        trigger: ${triggerStr},
-        replacement: ${replaceStr},
-        options: ${JSON.stringify(m.options || "mA")},
-        priority: ${m.priority || 0},
-        description: ${JSON.stringify(m.description || "")}${m.jsName ? `,\n        jsName: ${JSON.stringify(m.jsName)}` : ""}
-    }`;
+    // Build the macro object string with proper indentation
+    let lines = [
+      `    {`,
+      `        "trigger": ${triggerStr},`,
+      `        "replacement": ${replaceStr},`,
+      `        "options": ${JSON.stringify(m.options || "mA")},`,
+      `        "priority": ${m.priority || 0},`,
+      `        "description": ${JSON.stringify(m.description || "")}`
+    ];
+
+    if (m.jsName) {
+      lines.push(`        "jsName": ${JSON.stringify(m.jsName)}`);
+    }
+
+    lines.push(`    }`);
+    return lines.join('\n');
   });
 
   return `[\n${itemStrings.join(',\n')}\n]`;

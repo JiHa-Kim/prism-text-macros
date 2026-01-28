@@ -258,32 +258,55 @@ const handleMacroExpansion = async (el: HTMLElement) => {
 
   if (!text) return;
 
-  const match = checkMacroTrigger(text, cursor, macros);
-  if (match) {
-    console.log(`Prism Macro Debug: Macro Triggered! [${text.slice(match.triggerRange.start, match.triggerRange.end)}] ->`, match.replacementText);
-    
-    isExpanding = true;
-    try {
-      if (useBridge) {
-        const res = await applyEditViaBridge(
-          { start: match.triggerRange.start, end: match.triggerRange.end, text: match.replacementText },
-          { start: match.selection.start, end: match.selection.end }
-        );
-        if (!res.ok) {
-          console.warn("Prism Macro Debug: Bridge apply failed, falling back", res.reason);
-          applyFallbackReplacement(el, match);
+    const match = checkMacroTrigger(text, cursor, macros);
+    if (match) {
+        console.log(`Prism Macro Debug: Macro Triggered! [${text.slice(match.triggerRange.start, match.triggerRange.end)}] ->`, match.replacementText);
+        
+        // Visual feedback
+        showExpansionFeedback(el, match.triggerRange.start, match.replacementText.length);
+
+        isExpanding = true;
+        try {
+            if (useBridge) {
+                const res = await applyEditViaBridge(
+                    { start: match.triggerRange.start, end: match.triggerRange.end, text: match.replacementText },
+                    { start: match.selection.start, end: match.selection.end }
+                );
+                if (!res.ok) {
+                    console.warn("Prism Macro Debug: Bridge apply failed, falling back", res.reason);
+                    applyFallbackReplacement(el, match);
+                }
+            } else {
+                applyFallbackReplacement(el, match);
+            }
+        } finally {
+            setTimeout(() => { isExpanding = false; }, 50);
         }
-      } else {
-        applyFallbackReplacement(el, match);
-      }
-    } finally {
-      setTimeout(() => { isExpanding = false; }, 50);
     }
-  }
+};
+
+const showExpansionFeedback = (el: HTMLElement, start: number, length: number) => {
+    // This is hard for EditContext/Monaco without deep integration, 
+    // but we can show a small ripple or glow on the element itself
+    el.classList.add('macro-expanding');
+    setTimeout(() => el.classList.remove('macro-expanding'), 300);
 };
 
 // Main Logic
 injectBridgeScript();
+
+// Inject styles for feedback
+const injectFeedbackStyles = () => {
+    const style = document.createElement('style');
+    style.textContent = `
+        .macro-expanding {
+            transition: box-shadow 0.2s ease-out;
+            box-shadow: 0 0 8px rgba(92, 107, 192, 0.4) !important;
+        }
+    `;
+    document.head.appendChild(style);
+};
+injectFeedbackStyles();
 
 document.addEventListener("focusin", (e) => {
   const el = e.target as HTMLElement;

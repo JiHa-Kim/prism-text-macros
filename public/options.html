@@ -2,30 +2,66 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>Prism LaTeX Snippets - Options</title>
-    <style>
-      body { font: 14px system-ui, sans-serif; margin: 16px; max-width: 800px; margin: 0 auto; padding: 20px; }
-      textarea { width: 100%; height: 60vh; font-family: monospace; }
-      button { margin-top: 12px; padding: 8px 16px; cursor: pointer; }
-      .hint { opacity: 0.8; margin-bottom: 8px; line-height: 1.5; }
-      .error { color: red; margin-top: 8px; }
-      .success { color: green; margin-top: 8px; }
-      h1 { font-size: 1.5rem; margin-bottom: 1rem; }
-    </style>
+    <title>Prism Macros - Settings</title>
+    <link rel="stylesheet" href="../src/options.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
   </head>
   <body>
-    <h1>Prism Text Macros Settings</h1>
-    <div class="hint">
-      <p>Edit your snippets below as a JSON array.</p>
-      <p>Format: <code>{ "trigger": "...", "replacement": "...", "options": "mA" }</code></p>
-      <p>Placeholders: <code>${1}</code>, <code>${2}</code>, <code>${0}</code> (cursor). <br>
-      Visual selection: <code>${VISUAL}</code>.</p>
+    <!-- Liquid Background Elements -->
+    <div class="liquid-bg">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
     </div>
-    <textarea id="box"></textarea>
-    <div>
-        <button id="save">Save Macros</button>
-        <button id="reset">Reset to Defaults</button>
-    </div>
+    <div class="noise-overlay"></div>
+
+    <aside class="sidebar">
+      <div class="logo">
+        <span class="logo-text">Prism Macros</span>
+      </div>
+      <nav>
+        <div class="nav-item active" id="nav-macros">
+          <span>Macros</span>
+        </div>
+        <div class="nav-item" id="nav-advanced">
+          <span>Advanced Editor</span>
+        </div>
+        <div class="nav-item" id="nav-docs">
+          <span>Documentation</span>
+        </div>
+      </nav>
+      <div style="flex: 1;"></div>
+      <div class="nav-item" id="reset-btn">
+        <span>Reset Defaults</span>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <div id="macros-view">
+        <div class="header">
+          <div class="search-container">
+            <svg class="search-icon" viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <input type="text" id="search-input" class="search-input" placeholder="Search macros...">
+          </div>
+          <div class="actions">
+            <button class="btn btn-primary" id="new-macro-btn">+ New Macro</button>
+          </div>
+        </div>
+
+        <div class="macro-list" id="macro-list">
+          <!-- Macros will be injected here -->
+        </div>
+      </div>
+
+      <div id="advanced-view" class="editor-container">
+        <div class="header">
+          <h2>Advanced JSON Editor</h2>
+          <button class="btn btn-primary" id="save-advanced">Save Changes</button>
+        </div>
+        <textarea id="box" class="raw-json-editor" spellcheck="false"></textarea>
+      </div>
+    </main>
+
     <div id="status"></div>
     <script src="../dist/options.js" type="module"></script>
   </body>
