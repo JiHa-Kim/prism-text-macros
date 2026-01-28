@@ -1,10 +1,24 @@
+// content/content.ts
 import { Macro } from '../lib/types';
 import { checkMacroTrigger } from '../lib/macroEngine';
 import { expandMacros } from '../lib/macroUtils';
 import { defaultSnippets } from '../lib/defaultSnippets';
 import { loadMacrosFromStorage } from '../lib/storage';
-import { injectBridgeScript, getStateFromBridge, applyEditViaBridge } from './bridge';
-import { isEditable, getFallbackEditorState, applyFallbackReplacement, showExpansionFeedback, injectFeedbackStyles, ActiveMacroState } from './handlers';
+import {
+  injectBridgeScript,
+  getStateFromBridge,
+  applyEditViaBridge,
+  setSelectionViaBridge
+} from './bridge';
+import {
+  isEditable,
+  getFallbackEditorState,
+  applyFallbackReplacement,
+  showExpansionFeedback,
+  injectFeedbackStyles,
+  ActiveMacroState,
+  setContentEditableSelection
+} from './handlers';
 
 // State
 let enabled = true;
@@ -15,189 +29,258 @@ let activeMacro: ActiveMacroState | null = null;
 
 // Registry for function replacers
 const functionRegistry: Record<string, (match: any) => string> = {
-    "identity_matrix": (match: any) => {
-        const n = parseInt(match[1]);
-        if (isNaN(n)) return "";
-        let arr: number[][] = [];
-        for (let j = 0; j < n; j++) {
-            arr[j] = [];
-            for (let i = 0; i < n; i++) {
-                arr[j][i] = (i === j) ? 1 : 0;
-            }
-        }
-        let output = arr.map(el => el.join(" & ")).join(" \\\\\n");
-        output = `\\begin{pmatrix}\n${output}\n\\end{pmatrix}`;
-        return output;
+  identity_matrix: (match: any) => {
+    const n = parseInt(match[1]);
+    if (isNaN(n)) return '';
+    const arr: number[][] = [];
+    for (let j = 0; j < n; j++) {
+      arr[j] = [];
+      for (let i = 0; i < n; i++) {
+        arr[j][i] = i === j ? 1 : 0;
+      }
     }
+    let output = arr.map((el) => el.join(' & ')).join(' \\\\\n');
+    output = `\\begin{pmatrix}\n${output}\n\\end{pmatrix}`;
+    return output;
+  }
 };
 
 // Load initial state
 const init = async () => {
-    try {
-        const rawMacros = await loadMacrosFromStorage(chrome.storage.local);
-        macros = rawMacros.map((m: any) => {
-             // Hydrate Regex
-             if (m.isRegex && typeof m.trigger === 'string') {
-                 try {
-                     return { ...m, trigger: new RegExp(m.trigger) };
-                 } catch { return m; }
-             }
-             // Hydrate Functions via Registry
-             if (m.isFunc && m.jsName && functionRegistry[m.jsName]) {
-                 return { ...m, replacement: functionRegistry[m.jsName] };
-             }
-             return m;
-        });
-    } catch (e) {
-        console.error("Prism Macros: Error loading macros", e);
-    }
+  try {
+    const rawMacros = await loadMacrosFromStorage(chrome.storage.local);
+    macros = rawMacros.map((m: any) => {
+      // Hydrate Regex
+      if (m.isRegex && typeof m.trigger === 'string') {
+        try {
+          return { ...m, trigger: new RegExp(m.trigger) };
+        } catch {
+          return m;
+        }
+      }
+      // Hydrate Functions via Registry
+      if (m.isFunc && m.jsName && functionRegistry[m.jsName]) {
+        return { ...m, replacement: functionRegistry[m.jsName] };
+      }
+      return m;
+    });
+  } catch (e) {
+    console.error('Prism Macros: Error loading macros', e);
+  }
 };
 
 init();
 
 chrome.runtime.onMessage.addListener((msg) => {
-  if (msg.type === "TOGGLE_STATE") {
+  if (msg.type === 'TOGGLE_STATE') {
     enabled = msg.enabled;
   }
 });
 
 let isExpanding = false;
 
-const handleMacroExpansion = async (el: HTMLElement) => {
-  if (isExpanding || !enabled) return;
+// Prevent concurrent expansions (race between keydown/input + async bridge reads)
+let expansionInFlight = false;
 
-  // 1. Try Bridge
-  const bridgeState = await getStateFromBridge();
-  let text = "", cursor = 0;
-  let useBridge = false;
-
-  if (bridgeState.ok) {
-    text = bridgeState.text;
-    cursor = bridgeState.cursor;
-    useBridge = true;
-  } else {
-    // 2. Fallback
-    const fallback = getFallbackEditorState(el);
-    text = fallback.text;
-    cursor = fallback.cursor;
-  }
-
-  if (!text) return;
-
-    const match = checkMacroTrigger(text, cursor, macros);
-    if (match) {
-        console.log(`Prism Macro Debug: Macro Triggered! [${text.slice(match.triggerRange.start, match.triggerRange.end)}] ->`, match.replacementText);
-        
-        // Visual feedback
-        showExpansionFeedback(el, match.triggerRange.start, match.replacementText.length);
-
-        isExpanding = true;
-        try {
-            if (useBridge) {
-                const res = await applyEditViaBridge(
-                    { start: match.triggerRange.start, end: match.triggerRange.end, text: match.replacementText },
-                    { start: match.selection.start, end: match.selection.end }
-                );
-                if (!res.ok) {
-                    console.warn("Prism Macro Debug: Bridge apply failed, falling back", res.reason);
-                    const newState = applyFallbackReplacement(el, match);
-                    if (newState) activeMacro = newState;
-                } else {
-                    // Correctly set state for Bridge case too
-                    activeMacro = {
-                        tabStops: match.tabStops || [],
-                        currentStopIndex: -1,
-                        startOffset: match.triggerRange.start
-                    };
-                }
-            } else {
-                const newState = applyFallbackReplacement(el, match);
-                if (newState) activeMacro = newState;
-            }
-        } finally {
-            setTimeout(() => { isExpanding = false; }, 50);
-        }
-    }
+// Heuristic: Monaco/editor surfaces where DOM "input" may also fire or be weird.
+// We will run macro expansion from keydown only for these.
+const isMonacoLikeElement = (el: HTMLElement): boolean => {
+  if (!el) return false;
+  if (el.classList.contains('native-edit-context')) return true;
+  if (el.classList.contains('ime-text-area')) return true;
+  if (el.classList.contains('monaco-mouse-cursor-text')) return true;
+  if (el.closest('.monaco-editor')) return true;
+  return false;
 };
 
-// Main Logic
+const handleMacroExpansion = async (el: HTMLElement) => {
+  if (!enabled) return;
+
+  // Hard lock against concurrent async expansions.
+  // Must be set BEFORE any awaits, otherwise two invocations can race.
+  if (expansionInFlight) return;
+  expansionInFlight = true;
+
+  try {
+    // If we are already applying an edit, skip.
+    // (This is separate from expansionInFlight: isExpanding is "we are mutating editor now".)
+    if (isExpanding) return;
+
+    // 1) Try Bridge
+    const bridgeState = await getStateFromBridge();
+    let text = '';
+    let cursor = 0;
+    let useBridge = false;
+
+    if (bridgeState.ok) {
+      text = bridgeState.text;
+      cursor = bridgeState.cursor;
+      useBridge = true;
+    } else {
+      // 2) Fallback
+      const fallback = getFallbackEditorState(el);
+      text = fallback.text;
+      cursor = fallback.cursor;
+    }
+
+    if (!text) return;
+
+    const match = checkMacroTrigger(text, cursor, macros);
+    if (!match) return;
+
+    console.log(
+      `Prism Macro Debug: Macro Triggered! [${text.slice(
+        match.triggerRange.start,
+        match.triggerRange.end
+      )}] ->`,
+      match.replacementText
+    );
+
+    // Visual feedback
+    showExpansionFeedback(el, match.triggerRange.start, match.replacementText.length);
+
+    isExpanding = true;
+    try {
+      if (useBridge) {
+        const res = await applyEditViaBridge(
+          { start: match.triggerRange.start, end: match.triggerRange.end, text: match.replacementText },
+          { start: match.selection.start, end: match.selection.end }
+        );
+
+        if (!res.ok) {
+          console.warn('Prism Macro Debug: Bridge apply failed, falling back', res.reason);
+          const newState = applyFallbackReplacement(el, match);
+          if (newState) activeMacro = newState;
+        } else {
+          // Bridge case: tab stop state is valid
+          activeMacro = {
+            tabStops: match.tabStops || [],
+            currentStopIndex: -1
+          };
+        }
+      } else {
+        const newState = applyFallbackReplacement(el, match);
+        if (newState) activeMacro = newState;
+      }
+    } finally {
+      // Small cooldown helps avoid immediate re-entry from follow-on events
+      // triggered by the edit itself.
+      window.setTimeout(() => {
+        isExpanding = false;
+      }, 30);
+    }
+  } finally {
+    // Release the lock after a tick, so an "input" fired by our own edit
+    // does not re-enter immediately with stale state.
+    window.setTimeout(() => {
+      expansionInFlight = false;
+    }, 0);
+  }
+};
+
 injectBridgeScript();
 injectFeedbackStyles();
 
-document.addEventListener("focusin", (e) => {
+document.addEventListener('focusin', (e) => {
   const el = e.target as HTMLElement;
   if (el && isEditable(el)) {
-    console.log("Prism Macro Debug: Focus on", el.tagName);
+    console.log('Prism Macro Debug: Focus on', el.tagName);
   }
 });
 
 const handleTabKey = (e: KeyboardEvent, el: HTMLElement) => {
-    if (!activeMacro || activeMacro.tabStops.length === 0) return false;
+  if (!activeMacro || activeMacro.tabStops.length === 0) return false;
 
-    // Shift+Tab goes back, Tab goes forward
-    const direction = e.shiftKey ? -1 : 1;
-    let nextIndex = activeMacro.currentStopIndex + direction;
+  // Shift+Tab goes back, Tab goes forward
+  const direction = e.shiftKey ? -1 : 1;
+  let nextIndex = activeMacro.currentStopIndex + direction;
 
-    // Bounds check
-    if (nextIndex >= activeMacro.tabStops.length) {
-        // Exit active macro mode if we go past the end
-        activeMacro = null;
-        return false; // Allow default tab behavior (maybe?) or just stop
-    }
-    if (nextIndex < 0) {
-        nextIndex = 0; // Wrap or stay? Let's stay at 0
-    }
+  // Bounds check
+  if (nextIndex >= activeMacro.tabStops.length) {
+    // Exit active macro mode if we go past the end
+    activeMacro = null;
+    return false;
+  }
+  if (nextIndex < 0) {
+    nextIndex = 0;
+  }
 
-    const nextStop = activeMacro.tabStops[nextIndex];
-    activeMacro.currentStopIndex = nextIndex;
+  const nextStop = activeMacro.tabStops[nextIndex];
+  activeMacro.currentStopIndex = nextIndex;
 
-    const absStart = activeMacro.startOffset + nextStop.start;
-    const absEnd = activeMacro.startOffset + nextStop.end;
+  const absStart = nextStop.start;
+  const absEnd = nextStop.end;
 
-    // Select the tab stop
-    if (el.tagName === "TEXTAREA" || el.tagName === "INPUT") {
-        const input = el as HTMLInputElement | HTMLTextAreaElement;
-        input.setSelectionRange(absStart, absEnd);
-    } else if (el.tagName === "DIV" || (el as HTMLElement).contentEditable === 'true') {
-        const sel = window.getSelection();
-        if (sel && sel.rangeCount > 0) {
-             console.warn("Prism Macro: Tab navigation in contentEditable is approximate/experimental");
-        }
-    }
-    
-    // Prevent inserting a literal tab
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    return true;
+  // 1) Try Monaco via bridge (fire-and-forget)
+  setSelectionViaBridge({ start: absStart, end: absEnd });
+
+  // Select the tab stop
+  if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+    const input = el as HTMLInputElement | HTMLTextAreaElement;
+    input.setSelectionRange(absStart, absEnd);
+  } else if (el.tagName === 'DIV' || (el as HTMLElement).contentEditable === 'true') {
+    setContentEditableSelection(el, absStart, absEnd);
+  }
+
+  // Prevent inserting a literal tab
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  return true;
 };
 
-document.addEventListener("keydown", (e) => {
-  if (!enabled) return;
-  const el = document.activeElement as HTMLElement;
-  if (!isEditable(el)) return;
+document.addEventListener(
+  'keydown',
+  (e) => {
+    if (!enabled) return;
 
-  if (e.key === "Tab") {
+    const el = document.activeElement as HTMLElement;
+    if (!isEditable(el)) return;
+
+    if (e.key === 'Tab') {
       if (handleTabKey(e, el)) return;
-  }
+    }
 
-  if (["Control", "Alt", "Meta", "Shift", "CapsLock", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Backspace", "Delete"].includes(e.key)) {
-    // Maybe verify if we moved cursor out of bounds -> clear activeMacro?
-    return;
-  }
-  
-  if (isExpanding) return;
+    if (
+      [
+        'Control',
+        'Alt',
+        'Meta',
+        'Shift',
+        'CapsLock',
+        'ArrowLeft',
+        'ArrowRight',
+        'ArrowUp',
+        'ArrowDown',
+        'Backspace',
+        'Delete'
+      ].includes(e.key)
+    ) {
+      return;
+    }
 
-  // Keydown triggers after the character is inserted (usually) or we wait
-  // For better Monaco sync, we wait a tiny bit
-  setTimeout(() => handleMacroExpansion(el), 10);
-}, true);
+    if (isExpanding || expansionInFlight) return;
 
-document.addEventListener("input", (e) => {
-  if (!enabled || isExpanding) return;
+    // IMPORTANT: Only do keydown-trigger expansion for Monaco-like editors.
+    // For normal inputs/contenteditable, rely on input event to avoid double-trigger.
+    if (!isMonacoLikeElement(el)) return;
+
+    // Let Monaco apply the keystroke first, then read model state.
+    window.setTimeout(() => handleMacroExpansion(el), 10);
+  },
+  true
+);
+
+document.addEventListener('input', (e) => {
+  if (!enabled || isExpanding || expansionInFlight) return;
+
   const el = e.target as HTMLElement;
   if (!isEditable(el)) return;
+
+  // IMPORTANT: Monaco-like editors are handled by keydown path.
+  // Avoid double-trigger here.
+  if (isMonacoLikeElement(el)) return;
 
   handleMacroExpansion(el);
 });
 
-console.log("Prism Text Macros Loaded v0.2.2 (Refactored)");
+console.log('Prism Text Macros Loaded v0.2.2 (Refactored)');

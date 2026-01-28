@@ -9,6 +9,10 @@ export type MacroBridgeRequest =
         text: string;  // replacement text
       };
       selection: { start: number; end: number }; // absolute offsets after edit
+    }
+  | {
+      type: "SET_SELECTION";
+      selection: { start: number; end: number };
     };
 
 export type MacroBridgeResponse =
@@ -16,6 +20,8 @@ export type MacroBridgeResponse =
   | { type: "STATE"; ok: true; text: string; cursor: number }
   | { type: "STATE"; ok: false; reason: string }
   | { type: "APPLY_OK" }
-  | { type: "APPLY_FAIL"; reason: string };
+  | { type: "APPLY_FAIL"; reason: string }
+  | { type: "SELECTION_OK" }
+  | { type: "SELECTION_FAIL"; reason: string };
 
 export const BRIDGE_CHANNEL = "PRISM_MACRO_BRIDGE";

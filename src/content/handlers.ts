@@ -2,9 +2,8 @@ import { MacroMatch } from '../lib/macroEngine';
 import { TabStop } from '../lib/types';
 
 export interface ActiveMacroState {
-    tabStops: TabStop[];
+    tabStops: TabStop[];         // ABSOLUTE offsets in the editor text
     currentStopIndex: number;
-    startOffset: number;
 }
 
 export const isEditable = (el: Element | null): boolean => {
@@ -100,8 +99,7 @@ export const applyFallbackReplacement = (el: HTMLElement, match: MacroMatch): Ac
 
       return {
           tabStops: tabStops || [],
-          currentStopIndex: -1,
-          startOffset: triggerRange.start
+          currentStopIndex: -1
       };
     } catch (e) {
       console.error("Prism Macro Debug: EditContext replacement failed", e);
@@ -126,8 +124,7 @@ export const applyFallbackReplacement = (el: HTMLElement, match: MacroMatch): Ac
     
     return {
         tabStops: tabStops || [],
-        currentStopIndex: -1,
-        startOffset: triggerRange.start
+        currentStopIndex: -1
     };
   }
 
@@ -147,8 +144,7 @@ export const applyFallbackReplacement = (el: HTMLElement, match: MacroMatch): Ac
 
     return {
         tabStops: tabStops || [],
-        currentStopIndex: -1,
-        startOffset: triggerRange.start
+        currentStopIndex: -1
     };
   } else {
     el.innerText = replacementText;
@@ -163,11 +159,57 @@ export const showExpansionFeedback = (el: HTMLElement, start: number, length: nu
 
 export const injectFeedbackStyles = () => {
     const style = document.createElement('style');
-    style.textContent = `
-        .macro-expanding {
-            transition: box-shadow 0.2s ease-out;
-            box-shadow: 0 0 8px rgba(92, 107, 192, 0.4) !important;
-        }
-    `;
+    style.textContent = 
+        ".macro-expanding {" +
+        "    transition: box-shadow 0.2s ease-out;" +
+        "    box-shadow: 0 0 8px rgba(92, 107, 192, 0.4) !important;" +
+        "}";
     document.head.appendChild(style);
+};
+
+
+export const setContentEditableSelection = (root: HTMLElement, start: number, end: number): boolean => {
+  const doc = root.ownerDocument;
+  const win = doc.defaultView;
+  if (!win) return false;
+
+  const sel = win.getSelection();
+  if (!sel) return false;
+
+  const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let node: Node | null = walker.nextNode();
+  let pos = 0;
+
+  let startNode: Text | null = null;
+  let startOffset = 0;
+  let endNode: Text | null = null;
+  let endOffset = 0;
+
+  while (node) {
+    const textNode = node as Text;
+    const len = textNode.data.length;
+
+    if (!startNode && start <= pos + len) {
+      startNode = textNode;
+      startOffset = Math.max(0, start - pos);
+    }
+    if (!endNode && end <= pos + len) {
+      endNode = textNode;
+      endOffset = Math.max(0, end - pos);
+      break;
+    }
+
+    pos += len;
+    node = walker.nextNode();
+  }
+
+  if (!startNode || !endNode) return false;
+
+  const range = doc.createRange();
+  range.setStart(startNode, startOffset);
+  range.setEnd(endNode, endOffset);
+
+  sel.removeAllRanges();
+  sel.addRange(range);
+  return true;
 };

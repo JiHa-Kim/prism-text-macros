@@ -59,7 +59,16 @@ function handleGetState() {
     return;
   }
 
-  const text: string = model.getValue();
+  let text: string;
+  try {
+    // Ensure offsets match Monaco's offset math (LF-based)
+    const eolPref = (monaco.editor?.EndOfLinePreference?.LF ?? 1);
+    text = model.getValue(eolPref);
+  } catch {
+    text = model.getValue();
+    // Best-effort normalize if needed
+    text = text.replace(/\r\n/g, "\n");
+  }
   const sel = ed.getSelection?.();
   if (!sel) {
     post({ type: "STATE", ok: false, reason: "No selection" });
@@ -125,6 +134,31 @@ function handleApplyEdit(req: Extract<MacroBridgeRequest, { type: "APPLY_EDIT" }
   }
 }
 
+function handleSetSelection(req: Extract<MacroBridgeRequest, { type: "SET_SELECTION" }>) {
+  const monaco = getMonaco();
+  if (!monaco) { post({ type: "SELECTION_FAIL", reason: "window.monaco not found" }); return; }
+
+  const ed = pickActiveEditor(monaco);
+  if (!ed) { post({ type: "SELECTION_FAIL", reason: "No monaco editor instance" }); return; }
+
+  const model = ed.getModel?.();
+  if (!model) { post({ type: "SELECTION_FAIL", reason: "No model on editor" }); return; }
+
+  try {
+    const sPos = model.getPositionAt(req.selection.start);
+    const ePos = model.getPositionAt(req.selection.end);
+    const selection = new monaco.Selection(
+      sPos.lineNumber, sPos.column,
+      ePos.lineNumber, ePos.column
+    );
+    ed.setSelection(selection);
+    ed.focus();
+    post({ type: "SELECTION_OK" });
+  } catch (e: any) {
+    post({ type: "SELECTION_FAIL", reason: String(e?.message || e) });
+  }
+}
+
 window.addEventListener("message", (evt: MessageEvent) => {
   const data = evt.data as any;
   if (!data || data.channel !== BRIDGE_CHANNEL) return;
@@ -135,6 +169,7 @@ window.addEventListener("message", (evt: MessageEvent) => {
   if (req.type === "PING") post({ type: "PONG" });
   if (req.type === "GET_STATE") handleGetState();
   if (req.type === "APPLY_EDIT") handleApplyEdit(req);
+  if (req.type === "SET_SELECTION") handleSetSelection(req);
 });
 
 console.log("Prism Macro Page Bridge Loaded");

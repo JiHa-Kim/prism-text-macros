@@ -33,7 +33,7 @@ export function injectBridgeScript() {
   const s = document.createElement("script");
   // Update path to dist/pageBridge.js (bundled)
   // Usually this is correct if the key matches web_accessible_resources
-  s.src = chrome.runtime.getURL("dist/pageBridge.js"); 
+  s.src = chrome.runtime.getURL("dist/content/pageBridge.js"); 
   s.type = "text/javascript";
   (document.head || document.documentElement).appendChild(s);
   s.onload = () => s.remove();
@@ -63,4 +63,8 @@ export async function applyEditViaBridge(edit: { start: number; end: number; tex
         return { ok: false, reason: "Timeout" } as const;
     }
   }
+}
+
+export function setSelectionViaBridge(selection: { start: number; end: number }) {
+  sendToBridge({ type: "SET_SELECTION", selection });
 }
