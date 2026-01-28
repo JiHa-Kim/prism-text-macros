@@ -17,7 +17,7 @@
         "https://prism.openai.com/*"
       ],
       "js": [
-        "dist/content.js"
+        "dist/content/content.js"
       ],
       "run_at": "document_idle",
       "all_frames": true
@@ -26,7 +26,7 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "dist/pageBridge.js"
+        "dist/content/pageBridge.js"
       ],
       "matches": [
         "https://prism.openai.com/*"
@@ -46,6 +46,6 @@
     }
   },
   "background": {
-    "service_worker": "dist/background.js"
+    "service_worker": "dist/background/background.js"
   }
 }

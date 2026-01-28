@@ -3,15 +3,18 @@
   <head>
     <meta charset="utf-8" />
     <title>Prism Macros - Settings</title>
-    <link rel="stylesheet" href="../src/options.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../src/options/options.css" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono&display=swap"
+      rel="stylesheet"
+    />
   </head>
   <body>
     <!-- Liquid Background Elements -->
     <div class="liquid-bg">
-        <div class="blob blob-1"></div>
-        <div class="blob blob-2"></div>
-        <div class="blob blob-3"></div>
+      <div class="blob blob-1"></div>
+      <div class="blob blob-2"></div>
+      <div class="blob blob-3"></div>
     </div>
     <div class="noise-overlay"></div>
 
@@ -30,7 +33,7 @@
           <span>Documentation</span>
         </div>
       </nav>
-      <div style="flex: 1;"></div>
+      <div style="flex: 1"></div>
       <div class="nav-item" id="reset-btn">
         <span>Reset Defaults</span>
       </div>
@@ -40,11 +43,31 @@
       <div id="macros-view">
         <div class="header">
           <div class="search-container">
-            <svg class="search-icon" viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-            <input type="text" id="search-input" class="search-input" placeholder="Search macros...">
+            <svg
+              class="search-icon"
+              viewBox="0 0 24 24"
+              width="20"
+              height="20"
+              stroke="currentColor"
+              stroke-width="2.5"
+              fill="none"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input
+              type="text"
+              id="search-input"
+              class="search-input"
+              placeholder="Search macros..."
+            />
           </div>
           <div class="actions">
-            <button class="btn btn-primary" id="new-macro-btn">+ New Macro</button>
+            <button class="btn btn-primary" id="new-macro-btn">
+              + New Macro
+            </button>
           </div>
         </div>
 
@@ -58,13 +81,19 @@
           <div class="title-container">
             <h2>Advanced JSON Editor</h2>
           </div>
-          <button class="btn btn-primary" id="save-advanced">Save Changes</button>
+          <button class="btn btn-primary" id="save-advanced">
+            Save Changes
+          </button>
         </div>
-        <textarea id="box" class="raw-json-editor" spellcheck="false"></textarea>
+        <textarea
+          id="box"
+          class="raw-json-editor"
+          spellcheck="false"
+        ></textarea>
       </div>
     </main>
 
     <div id="status"></div>
-    <script src="../dist/options.js" type="module"></script>
+    <script src="../dist/options/options.js" type="module"></script>
   </body>
 </html>

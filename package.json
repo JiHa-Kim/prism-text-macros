@@ -12,7 +12,7 @@
     "typescript": "^5.9.3"
   },
   "scripts": {
-    "build": "esbuild src/background.ts src/content.ts src/options.ts src/pageBridge.ts --bundle --outdir=dist --format=esm --target=esnext",
-    "dev": "esbuild src/background.ts src/content.ts src/options.ts src/pageBridge.ts --bundle --outdir=dist --format=esm --target=esnext --watch"
+    "build": "esbuild src/background/background.ts src/content/content.ts src/options/options.ts src/content/pageBridge.ts --bundle --outdir=dist --format=esm --target=esnext",
+    "dev": "esbuild src/background/background.ts src/content/content.ts src/options/options.ts src/content/pageBridge.ts --bundle --outdir=dist --format=esm --target=esnext --watch"
   }
 }

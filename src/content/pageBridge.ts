@@ -1,4 +1,4 @@
-import { BRIDGE_CHANNEL, MacroBridgeRequest, MacroBridgeResponse } from "./protocol";
+import { BRIDGE_CHANNEL, MacroBridgeRequest, MacroBridgeResponse } from "../lib/protocol";
 
 type Monaco = any; // We'll cast as needed to avoid heavy type dependencies if they aren't available
 
