@@ -192,6 +192,13 @@ export const processReplacement = (
   };
 };
 
+export interface MacroMatch {
+  replacementText: string;
+  triggerRange: { start: number; end: number };
+  selection: TabStop;
+  tabStops: TabStop[];
+}
+
 /**
  * Checks if a macro is triggered.
  */
@@ -201,9 +208,9 @@ export const checkMacroTrigger = (
   macros: Macro[],
   forceMath: boolean = false,
   checkAuto: boolean = false
-): { text: string; selection: TabStop; tabStops: TabStop[] } | null => {
+): MacroMatch | null => {
   const textBeforeCursor = text.slice(0, cursorIndex);
-  const textAfterCursor = text.slice(cursorIndex);
+  // Remove textAfterCursor as we don't need it for full reconstruction anymore
 
   const inMath = forceMath || isInsideMath(text, cursorIndex);
 
@@ -280,20 +287,18 @@ export const checkMacroTrigger = (
 
           const { text: replacementText, selection, tabStops } = processReplacement(macro, replacementArgs);
 
-          const prefix = textBeforeCursor.slice(0, -matchText.length);
-          const newText = prefix + replacementText + textAfterCursor;
-
-          const insertionStart = prefix.length;
+          const triggerStart = cursorIndex - matchText.length;
 
           return {
-            text: newText,
+            replacementText,
+            triggerRange: { start: triggerStart, end: cursorIndex },
             selection: {
-              start: insertionStart + selection.start,
-              end: insertionStart + selection.end
+              start: triggerStart + selection.start,
+              end: triggerStart + selection.end
             },
             tabStops: tabStops.map(ts => ({
-              start: insertionStart + ts.start,
-              end: insertionStart + ts.end
+              start: triggerStart + ts.start,
+              end: triggerStart + ts.end
             }))
           };
         }
@@ -320,20 +325,18 @@ export const checkMacroTrigger = (
 
             const { text: replacementText, selection, tabStops } = processReplacement(macro, replacementArgs);
 
-            const prefix = textBeforeCursor.slice(0, -matchText.length);
-            const newText = prefix + replacementText + textAfterCursor;
-
-            const insertionStart = prefix.length;
+            const triggerStart = cursorIndex - matchText.length;
 
             return {
-              text: newText,
+              replacementText,
+              triggerRange: { start: triggerStart, end: cursorIndex },
               selection: {
-                start: insertionStart + selection.start,
-                end: insertionStart + selection.end
+                start: triggerStart + selection.start,
+                end: triggerStart + selection.end
               },
               tabStops: tabStops.map(ts => ({
-                start: insertionStart + ts.start,
-                end: insertionStart + ts.end
+                start: triggerStart + ts.start,
+                end: triggerStart + ts.end
               }))
             };
           }
@@ -342,20 +345,18 @@ export const checkMacroTrigger = (
         if (textBeforeCursor.endsWith(macro.trigger)) {
           const { text: replacementText, selection, tabStops } = processReplacement(macro);
 
-          const prefix = textBeforeCursor.slice(0, -macro.trigger.length);
-          const newText = prefix + replacementText + textAfterCursor;
-
-          const insertionStart = prefix.length;
+          const triggerStart = cursorIndex - macro.trigger.length;
 
           return {
-            text: newText,
+            replacementText,
+            triggerRange: { start: triggerStart, end: cursorIndex },
             selection: {
-              start: insertionStart + selection.start,
-              end: insertionStart + selection.end
+              start: triggerStart + selection.start,
+              end: triggerStart + selection.end
             },
             tabStops: tabStops.map(ts => ({
-              start: insertionStart + ts.start,
-              end: insertionStart + ts.end
+              start: triggerStart + ts.start,
+              end: triggerStart + ts.end
             }))
           };
         }
