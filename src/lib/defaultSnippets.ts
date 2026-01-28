@@ -18,14 +18,14 @@ export const defaultSnippets: Macro[] = [
     // Math mode
     {trigger: "mk", replacement: "$$0$", options: "tA"
     },
-    {trigger: "dm", replacement: "$$\n$0\n$$", options: "tA"
+    {trigger: "dm", replacement: "$$\n$0\n$$", options: "tAw"
     },
     {trigger: "beg", replacement: "\\begin{$0}\n$1\n\\end{$0}", options: "mA"
     },
     // Dashes
-    {trigger: "--", replacement: "–", options: "tA"},
-    {trigger: "–-", replacement: "—", options: "tA"},
-    {trigger: "—-", replacement: "---", options: "tA"},
+    // {trigger: "--", replacement: "–", options: "tA"},
+    // {trigger: "–-", replacement: "—", options: "tA"},
+    // {trigger: "—-", replacement: "---", options: "tA"},
     // Greek letters
     {trigger: "@a", replacement: "\\alpha", options: "mA"
     },
@@ -94,6 +94,8 @@ export const defaultSnippets: Macro[] = [
     {trigger: "sq", replacement: "\\sqrt{ $0 }$1", options: "mA"
     },
     {trigger: "//", replacement: "\\frac{$0}{$1}$2", options: "mA"
+    },
+    {trigger: /((?:\d+(?:\.\d*)?)|(?:\\?[a-zA-Z]+(?:\([^)]*\))?)|(?:\([^)]*\))|(?:\\[a-zA-Z]+(?:\[[^\]]*\])?(?:\{[^}]*\})*))\/$/, replacement: "\\frac{[[0]]}{$0}$1", options: "rmA", description: "Auto fraction"
     },
     {trigger: "ee", replacement: "e^{ $0 }$1", options: "mA"
     },
@@ -434,18 +436,18 @@ export const defaultSnippets: Macro[] = [
     },
     {trigger: "abs", replacement: "|$0|$1", options: "mA"
     },
-    // {trigger: "(", replacement: "(${VISUAL})", options: "mA"
-    // },
-    // {trigger: "[", replacement: "[${VISUAL}]", options: "mA"
-    // },
-    // {trigger: "{", replacement: "{${VISUAL}}", options: "mA"
-    // },
-    // {trigger: "(", replacement: "($0)$1", options: "mA"
-    // },
-    // {trigger: "{", replacement: "{$0}$1", options: "mA"
-    // },
-    // {trigger: "[", replacement: "[$0]$1", options: "mA"
-    // },
+    {trigger: "(", replacement: "(${VISUAL})", options: "mA"
+    },
+    {trigger: "[", replacement: "[${VISUAL}]", options: "mA"
+    },
+    {trigger: "{", replacement: "{${VISUAL}}", options: "mA"
+    },
+    {trigger: "(", replacement: "($0)$1", options: "mA"
+    },
+    {trigger: "{", replacement: "{$0}$1", options: "mA"
+    },
+    {trigger: "[", replacement: "[$0]$1", options: "mA"
+    },
     {trigger: "lr(", replacement: "\\left( $0 \\right) $1", options: "mA"
     },
     {trigger: "lr{", replacement: "\\left\\{ $0 \\right\\} $1", options: "mA"
@@ -475,7 +477,7 @@ export const defaultSnippets: Macro[] = [
                 1
             ];
 
-		const arr: number[][] = [];
+		let arr: number[][] = [];
 		for (let j = 0; j < n; j++) {
 			arr[j
                 ] = [];
@@ -492,6 +494,6 @@ export const defaultSnippets: Macro[] = [
             }\n\\end{pmatrix
             }`;
 		return output;
-        }, options: "mA", description: "N x N identity matrix", jsName: "identity_matrix"
+        }, options: "mA", description: "N x N identity matrix"
     },
 ];

@@ -103,20 +103,64 @@ const tests: TestCase[] = [
   // 2. Greek Expansion
   {
     name: "Greek expansion: pi should work",
-    text: "$$pi$$", // text before cursor is $$pi
-    cursor: 4, // $ $ p i | $ $
+    text: "$$pi",
+    cursor: 4,
     shouldMatch: true,
-    expectedReplacement: "$\\pi" // The trigger is ([^\\\\])(${GREEK}). Captures prev char "$".
+    expectedReplacement: "$\\pi"
   },
 
-  // 3. Dint Tabstops
+  // 3. Fraction Expansion (Desired Feature)
+  {
+    name: "Auto fraction: sin(x)/ should work",
+    text: "$\\sin(x)/",
+    cursor: "$\\sin(x)/".length,
+    shouldMatch: true,
+    expectedReplacement: "\\frac{\\sin(x)}{}"
+  },
+  {
+    name: "Auto fraction: simple variable x/",
+    text: "$x/",
+    cursor: "$x/".length,
+    shouldMatch: true,
+    expectedReplacement: "\\frac{x}{}"
+  },
+  {
+    name: "Auto fraction: command \\alpha/",
+    text: "$\\alpha/",
+    cursor: "$\\alpha/".length,
+    shouldMatch: true,
+    expectedReplacement: "\\frac{\\alpha}{}"
+  },
+  {
+    name: "Auto fraction: group (a+b)/",
+    text: "$(a+b)/",
+    cursor: "$(a+b)/".length,
+    shouldMatch: true,
+    expectedReplacement: "\\frac{(a+b)}{}"
+  },
+
+  // 4. Brackets and Priorities
+  {
+    name: "Bracket auto-pair: (",
+    text: "$(",
+    cursor: 2,
+    shouldMatch: true,
+    expectedReplacement: "()"
+  },
+  {
+    name: "Priority check: dint vs int",
+    text: "$dint",
+    cursor: 5,
+    shouldMatch: true,
+    expectedReplacement: "\\int_{0}^{1}  \\, dx " // dint has higher priority/length
+  },
+
+  // 5. Dint Tabstops
   {
     name: "dint tabstop order",
     text: "$$dint$$",
     cursor: 6,
     shouldMatch: true,
-    // Original replacement: \int_{${0:0}}^{${1:1}} $2 \, d${3:x} $4
-    // Expected shifted snippet: \int_{${1:0}}^{${2:1}} $3 \, d${4:x} $5
     expectedSnippetText: "\\\\int_{${1:0}}^{${2:1}} ${3} \\\\, d${4:x} ${5}",
     expectedSelectionStartOffset: 8
   }

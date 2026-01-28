@@ -102,4 +102,4 @@ def parse_snippets(md_path, ts_path):
 
 
 if __name__ == "__main__":
-    parse_snippets("local_docs/snippets.md", "src/defaultSnippets.ts")
+    parse_snippets("local_docs/snippets.md", "src/lib/defaultSnippets.ts")
