@@ -1,8 +1,8 @@
-Monaco Text Macros brings powerful, text-expansion capabilities to web-based Monaco editors, specifically optimized for OpenAI Prism and similar environments.
+Prism Text Macros brings powerful, text-expansion capabilities to web-based Monaco editors, specifically optimized for OpenAI Prism and similar environments.
 
 This project is inspired by the macros in the Obsidian LaTeX Suite plugin: https://github.com/artisticat1/obsidian-latex-suite.
 
-Do you miss the speed of your local editor when working in the browser? Monaco Text Macros bridges that gap by adding seamless, Obsidian-style macro expansion to your web workflow.
+Do you miss the speed of your local editor when working in the browser? Prism Text Macros bridges that gap by adding seamless, Obsidian-style macro expansion to your web workflow.
 
 Key Features:
 

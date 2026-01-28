@@ -1,4 +1,4 @@
-# prism-text-macros
+# Prism Text Macros
 
 To install dependencies:
 

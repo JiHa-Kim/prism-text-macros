@@ -4,7 +4,7 @@
 
 ## Introduction
 
-This Privacy Policy describes how the "Monaco Text Macros" extension collects, uses, and shares your data. We are committed to protecting your privacy.
+This Privacy Policy describes how the "Prism Text Macros" extension collects, uses, and shares your data. We are committed to protecting your privacy.
 
 ## Data Collection
 

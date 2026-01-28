@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Monaco Text Macros",
+  "name": "Prism Text Macros",
   "version": "0.0.0.1",
   "description": "General purpose text and Obsidian-style LaTeX macros for Monaco editors. Works with OpenAI Prism.",
   "icons": {
