@@ -16,5 +16,14 @@ chrome.commands.onCommand.addListener((command) => {
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg && msg.type === "GET_ENABLED") {
     sendResponse({ enabled });
+  } else if (msg && msg.type === "MACROS_UPDATED") {
+    // Broadcast to all tabs
+    chrome.tabs.query({}, (tabs) => {
+      tabs.forEach((tab) => {
+        if (tab.id) {
+          chrome.tabs.sendMessage(tab.id, { type: "MACROS_UPDATED" });
+        }
+      });
+    });
   }
 });

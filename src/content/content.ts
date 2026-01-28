@@ -66,7 +66,7 @@ async function syncConfigToBridge() {
   // If bridge isn't present, that's fine: fallback editors still work.
 }
 
-const init = async () => {
+const loadMacros = async () => {
   try {
     const rawMacros = await loadMacrosFromStorage(chrome.storage.local);
     macros = rawMacros.map((m: any) => {
@@ -93,12 +93,20 @@ const init = async () => {
   }
 };
 
+const init = async () => {
+    await loadMacros();
+};
+
 init();
 
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === "TOGGLE_STATE") {
     enabled = msg.enabled;
     syncConfigToBridge();
+  } else if (msg.type === "MACROS_UPDATED") {
+    // Hot reload macros
+    console.log("Prism Macros: Reloading macros...");
+    loadMacros();
   }
 });
 

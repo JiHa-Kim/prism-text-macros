@@ -39,6 +39,10 @@ const saveMacros = async () => {
         });
     
         await saveMacrosToStorage(chrome.storage.local, jsonToStore as Macro[]); // cast because serialization changes types slightly?
+        
+        // Notify background script to broadcast update
+        chrome.runtime.sendMessage({ type: "MACROS_UPDATED" });
+        
         box.value = serializeMacros(allMacros);
     } catch (e: any) {
         showStatus(status, "Error: " + e.message, 'error');

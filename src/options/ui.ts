@@ -83,9 +83,15 @@ export const renderMacroList = (macros: Macro[], container: HTMLElement, filter:
     // Only typeset if there is math content
     const mathContent = card.querySelector('.math-content');
     if (mathContent) {
-        const MathJax = (window as any).MathJax;
-        if (MathJax && MathJax.typesetPromise) {
-            MathJax.typesetPromise([mathContent]).catch((err: any) => console.log('MathJax list error', err));
+        const win = window as any;
+        if (win.MathJax && win.MathJax.startup && win.MathJax.startup.promise) {
+            win.MathJax.startup.promise.then(() => {
+                if (win.MathJax.typesetPromise) {
+                     return win.MathJax.typesetPromise([mathContent]);
+                }
+            }).catch((err: any) => console.log('MathJax typeset error', err));
+        } else if (win.MathJax && win.MathJax.typesetPromise) {
+            win.MathJax.typesetPromise([mathContent]).catch((err: any) => console.log('MathJax list error', err));
         }
     }
     
