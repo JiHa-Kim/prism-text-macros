@@ -1,8 +1,13 @@
 {
   "manifest_version": 3,
-  "name": "Prism LaTeX Snippets",
-  "version": "0.2.0",
-  "description": "Obsidian-like LaTeX snippet expansion for prism.openai.com",
+  "name": "Monaco Text Macros",
+  "version": "0.0.0.1",
+  "description": "General purpose text and Obsidian-style LaTeX macros for Monaco editors. Works with OpenAI Prism.",
+  "icons": {
+    "16": "public/icons/icon-16.png",
+    "48": "public/icons/icon-48.png",
+    "128": "public/icons/icon-128.png"
+  },
   "permissions": [
     "storage",
     "activeTab",
