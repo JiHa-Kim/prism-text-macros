@@ -68,3 +68,8 @@ export async function applyEditViaBridge(edit: { start: number; end: number; tex
 export function setSelectionViaBridge(selection: { start: number; end: number }) {
   sendToBridge({ type: "SET_SELECTION", selection });
 }
+
+export function syncWithBridge(macros: any[], enabled: boolean) {
+  sendToBridge({ type: "SET_MACROS", macros });
+  sendToBridge({ type: "SET_ENABLED", enabled });
+}

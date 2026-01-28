@@ -1,14 +1,15 @@
 // content/content.ts
 import { Macro } from '../lib/types';
-import { checkMacroTrigger } from '../lib/macroEngine';
-import { expandMacros } from '../lib/macroUtils';
+import { checkMacroTrigger, hydrateMacros } from '../lib/macroEngine';
+import { expandMacros, prepareForStorage } from '../lib/macroUtils';
 import { defaultSnippets } from '../lib/defaultSnippets';
 import { loadMacrosFromStorage } from '../lib/storage';
 import {
   injectBridgeScript,
   getStateFromBridge,
   applyEditViaBridge,
-  setSelectionViaBridge
+  setSelectionViaBridge,
+  syncWithBridge
 } from './bridge';
 import {
   isEditable,
@@ -22,50 +23,21 @@ import {
 
 // State
 let enabled = true;
-let macros: Macro[] = expandMacros(defaultSnippets);
+let macros: Macro[] = hydrateMacros(expandMacros(defaultSnippets));
 
 // Tabstop State
 let activeMacro: ActiveMacroState | null = null;
 
-// Registry for function replacers
-const functionRegistry: Record<string, (match: any) => string> = {
-  identity_matrix: (match: any) => {
-    const n = parseInt(match[1]);
-    if (isNaN(n)) return '';
-    const arr: number[][] = [];
-    for (let j = 0; j < n; j++) {
-      arr[j] = [];
-      for (let i = 0; i < n; i++) {
-        arr[j][i] = i === j ? 1 : 0;
-      }
-    }
-    let output = arr.map((el) => el.join(' & ')).join(' \\\\\n');
-    output = `\\begin{pmatrix}\n${output}\n\\end{pmatrix}`;
-    return output;
-  }
-};
-
 // Load initial state
 const init = async () => {
   try {
-    const rawMacros = await loadMacrosFromStorage(chrome.storage.local);
-    macros = rawMacros.map((m: any) => {
-      // Hydrate Regex
-      if (m.isRegex && typeof m.trigger === 'string') {
-        try {
-          return { ...m, trigger: new RegExp(m.trigger) };
-        } catch {
-          return m;
-        }
-      }
-      // Hydrate Functions via Registry
-      if (m.isFunc && m.jsName && functionRegistry[m.jsName]) {
-        return { ...m, replacement: functionRegistry[m.jsName] };
-      }
-      return m;
-    });
+    const raw = await loadMacrosFromStorage(chrome.storage.local);
+    macros = hydrateMacros(raw);
+    syncWithBridge(prepareForStorage(macros), enabled);
   } catch (e) {
     console.error('Prism Macros: Error loading macros', e);
+    // Fallback sync
+    syncWithBridge(prepareForStorage(macros), enabled);
   }
 };
 
@@ -74,6 +46,7 @@ init();
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === 'TOGGLE_STATE') {
     enabled = msg.enabled;
+    syncWithBridge(prepareForStorage(macros), enabled);
   }
 });
 
@@ -259,12 +232,9 @@ document.addEventListener(
     }
 
     if (isExpanding || expansionInFlight) return;
+    if (isMonacoLikeElement(el)) return;
 
-    // IMPORTANT: Only do keydown-trigger expansion for Monaco-like editors.
-    // For normal inputs/contenteditable, rely on input event to avoid double-trigger.
-    if (!isMonacoLikeElement(el)) return;
-
-    // Let Monaco apply the keystroke first, then read model state.
+    // Normal input cooling down and handling
     window.setTimeout(() => handleMacroExpansion(el), 10);
   },
   true

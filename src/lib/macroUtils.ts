@@ -1,6 +1,25 @@
 
 import { Macro } from './types';
 
+/**
+ * Converts triggers/replacements to serializable format (strings)
+ */
+export const prepareForStorage = (macros: Macro[]): any[] => {
+    return macros.map(m => {
+        const isRegex = m.trigger instanceof RegExp;
+        const isFunc = typeof m.replacement === 'function';
+        
+        return {
+            ...m,
+            trigger: isRegex ? (m.trigger as RegExp).source : m.trigger,
+            isRegex,
+            replacement: isFunc ? (m.replacement as Function).toString() : m.replacement,
+            isFunc,
+            jsName: m.jsName
+        };
+    });
+};
+
 const SNIPPET_VARIABLES: Record<string, string> = {
   "GREEK": "alpha|beta|gamma|Gamma|delta|Delta|epsilon|varepsilon|zeta|eta|theta|Theta|vartheta|iota|kappa|lambda|Lambda|mu|nu|xi|Xi|pi|Pi|rho|varrho|sigma|Sigma|tau|upsilon|Upsilon|phi|Phi|varphi|chi|psi|Psi|omega|Omega",
   "SYMBOL": "infty|nabla|partial|dots|cdot|times|leftrightarrow|mapsto|setminus|mid|cap|cup|land|lor|subseteq|subset|implies|impliedby|iff|exists|forall|equiv|cong|simeq|approx|sim|propto|le|ge|simeq|approx",

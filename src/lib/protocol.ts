@@ -13,6 +13,14 @@ export type MacroBridgeRequest =
   | {
       type: "SET_SELECTION";
       selection: { start: number; end: number };
+    }
+  | {
+      type: "SET_MACROS";
+      macros: any[];
+    }
+  | {
+      type: "SET_ENABLED";
+      enabled: boolean;
     };
 
 export type MacroBridgeResponse =

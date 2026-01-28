@@ -1,5 +1,38 @@
 import { Macro, TabStop } from './types';
 
+export const functionRegistry: Record<string, (match: any) => string> = {
+  identity_matrix: (match: any) => {
+    const n = parseInt(match[1]);
+    if (isNaN(n)) return '';
+    const arr: number[][] = [];
+    for (let j = 0; j < n; j++) {
+      arr[j] = [];
+      for (let i = 0; i < n; i++) {
+        arr[j][i] = i === j ? 1 : 0;
+      }
+    }
+    let output = arr.map((el) => el.join(' & ')).join(' \\\\\n');
+    output = `\\begin{pmatrix}\n${output}\n\\end{pmatrix}`;
+    return output;
+  }
+};
+
+export const hydrateMacros = (raw: any[]): Macro[] => {
+  return raw.map((m: any) => {
+    let trigger = m.trigger;
+    if ((m.isRegex || (m.options || "").includes('r')) && typeof trigger === 'string') {
+      try { trigger = new RegExp(trigger); } catch {}
+    }
+    
+    let replacement = m.replacement;
+    if ((m.isFunc || m.jsName) && typeof replacement === 'string' && functionRegistry[m.jsName || ""]) {
+        replacement = functionRegistry[m.jsName || ""];
+    }
+
+    return { ...m, trigger, replacement };
+  });
+};
+
 /**
  * LaTeX Parser to track math mode state.
  */
