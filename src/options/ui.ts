@@ -5,6 +5,45 @@ import { Macro } from '../lib/types';
 // The original code used global consts.
 // We can export references or just accept them.
 
+let mathJaxObserver: IntersectionObserver | null = null;
+
+const getMathJaxObserver = () => {
+    if (mathJaxObserver) return mathJaxObserver;
+    
+    mathJaxObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                const el = entry.target as HTMLElement;
+                const win = window as any;
+                
+                // Helper to perform the actual typeset
+                const doTypeset = () => {
+                    if (win.MathJax && win.MathJax.typesetPromise) {
+                        win.MathJax.typesetPromise([el]).catch((err: any) => 
+                            console.log('MathJax typeset error', err)
+                        );
+                    }
+                };
+
+                if (win.MathJax && win.MathJax.startup && win.MathJax.startup.promise) {
+                    win.MathJax.startup.promise.then(doTypeset).catch((err: any) => 
+                        console.log('MathJax startup logic error', err)
+                    );
+                } else {
+                    doTypeset();
+                }
+                
+                mathJaxObserver?.unobserve(el);
+            }
+        });
+    }, {
+        rootMargin: '200px', // Start rendering before it enters viewport
+        threshold: 0.01
+    });
+    
+    return mathJaxObserver;
+};
+
 const cleanLatex = (str: string) => {
     // Remove snippet placeholders like $0, ${1}, ${1:default}
     // And also remove tabstops $1 etc
@@ -81,18 +120,9 @@ export const renderMacroList = (macros: Macro[], container: HTMLElement, filter:
     container.appendChild(card);
     
     // Only typeset if there is math content
-    const mathContent = card.querySelector('.math-content');
+    const mathContent = card.querySelector('.math-content') as HTMLElement;
     if (mathContent) {
-        const win = window as any;
-        if (win.MathJax && win.MathJax.startup && win.MathJax.startup.promise) {
-            win.MathJax.startup.promise.then(() => {
-                if (win.MathJax.typesetPromise) {
-                     return win.MathJax.typesetPromise([mathContent]);
-                }
-            }).catch((err: any) => console.log('MathJax typeset error', err));
-        } else if (win.MathJax && win.MathJax.typesetPromise) {
-            win.MathJax.typesetPromise([mathContent]).catch((err: any) => console.log('MathJax list error', err));
-        }
+        getMathJaxObserver().observe(mathContent);
     }
     
     setTimeout(() => {

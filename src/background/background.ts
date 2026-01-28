@@ -23,7 +23,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     chrome.tabs.query({}, (tabs) => {
       tabs.forEach((tab) => {
         if (tab.id) {
-          chrome.tabs.sendMessage(tab.id, { type: "MACROS_UPDATED" }).catch(() => {
+          chrome.tabs.sendMessage(tab.id, { 
+            type: "MACROS_UPDATED", 
+            macros: msg.macros // Forward the macros if they exist
+          }).catch(() => {
             // Ignore if receiving end does not exist (page doesn't have content script)
           });
         }

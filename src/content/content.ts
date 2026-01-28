@@ -66,10 +66,8 @@ async function syncConfigToBridge() {
   // If bridge isn't present, that's fine: fallback editors still work.
 }
 
-const loadMacros = async () => {
-  try {
-    const rawMacros = await loadMacrosFromStorage(chrome.storage.local);
-    macros = rawMacros.map((m: any) => {
+const hydrateMacros = (rawMacros: any[]) => {
+    return rawMacros.map((m: any) => {
       // Hydrate Regex
       if (m.isRegex && typeof m.trigger === "string") {
         try {
@@ -84,6 +82,12 @@ const loadMacros = async () => {
       }
       return m;
     });
+};
+
+const loadMacros = async (providedMacros?: any[]) => {
+  try {
+    const rawMacros = providedMacros || await loadMacrosFromStorage(chrome.storage.local);
+    macros = hydrateMacros(rawMacros);
     macros = expandMacros(macros);
   } catch (e) {
     console.error("Prism Macros: Error loading macros", e);
@@ -105,8 +109,13 @@ chrome.runtime.onMessage.addListener((msg) => {
     syncConfigToBridge();
   } else if (msg.type === "MACROS_UPDATED") {
     // Hot reload macros
-    console.log("Prism Macros: Reloading macros...");
-    loadMacros();
+    if (msg.macros) {
+        console.log("Prism Macros: Reloading macros from message data...");
+        loadMacros(msg.macros);
+    } else {
+        console.log("Prism Macros: Reloading macros from storage...");
+        loadMacros();
+    }
   }
 });
 
