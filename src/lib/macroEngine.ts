@@ -246,9 +246,9 @@ class LaTeXState {
       if (!this.inMath) {
         // avoid currency and shell vars like $HOME
         const isCurrency = /[0-9]/.test(next);
-        const isShellVar = /^[A-Z_]+/.test(text.slice(index + 1));
+        const isShellVar = /^[A-Z_]{2,}(\s|$|[^a-zA-Z0-9_])/.test(text.slice(index + 1));
         const hasLeadingSpace = next === " ";
-        if (!isCurrency && !isShellVar && !hasLeadingSpace) {
+        if (!isCurrency && !isShellVar) {
           this.inMath = true;
         }
       } else {
