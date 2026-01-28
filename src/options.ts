@@ -64,12 +64,12 @@ const save = async () => {
         ...m,
         trigger: m.trigger instanceof RegExp ? m.trigger.source : m.trigger,
         isRegex: m.trigger instanceof RegExp,
-        // If replacement is function, we can't easily store it. 
         // We'll warn if it's a function?
         // Existing default snippets have some functions. 
         // We'll try to .toString() the function?
         replacement: typeof m.replacement === 'function' ? m.replacement.toString() : m.replacement,
-        isFunc: typeof m.replacement === 'function'
+        isFunc: typeof m.replacement === 'function',
+        jsName: m.jsName // Persist the registry name
       };
     });
 

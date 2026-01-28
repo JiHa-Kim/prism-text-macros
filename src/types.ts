@@ -6,6 +6,7 @@ export interface Macro {
   options?: string; // e.g., "mA", "rmA", "tA"
   description?: string;
   priority?: number;
+  jsName?: string;
 }
 
 export interface EditorState {

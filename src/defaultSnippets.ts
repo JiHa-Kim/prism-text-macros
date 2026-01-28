@@ -492,6 +492,6 @@ export const defaultSnippets: Macro[] = [
             }\n\\end{pmatrix
             }`;
 		return output;
-        }, options: "mA", description: "N x N identity matrix"
+        }, options: "mA", description: "N x N identity matrix", jsName: "identity_matrix"
     },
 ];

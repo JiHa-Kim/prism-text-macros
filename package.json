@@ -10,5 +10,8 @@
   },
   "peerDependencies": {
     "typescript": "^5.9.3"
+  },
+  "scripts": {
+    "build": "esbuild src/background.ts src/content.ts src/options.ts --bundle --outdir=dist --format=esm --target=esnext"
   }
 }
