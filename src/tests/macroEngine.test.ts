@@ -1,6 +1,6 @@
-import { checkMacroTrigger } from '../macroEngine';
-import { defaultSnippets } from '../defaultSnippets';
-import { expandMacros } from '../macroUtils';
+import { checkMacroTrigger } from '../lib/macroEngine';
+import { defaultSnippets } from '../lib/defaultSnippets';
+import { expandMacros } from '../lib/macroUtils';
 
 const macros = expandMacros(defaultSnippets);
 
