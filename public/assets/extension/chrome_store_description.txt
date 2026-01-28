@@ -1,5 +1,7 @@
 Monaco Text Macros brings powerful, text-expansion capabilities to web-based Monaco editors, specifically optimized for OpenAI Prism and similar environments.
 
+This project is inspired by the macros in the Obsidian LaTeX Suite plugin: https://github.com/artisticat1/obsidian-latex-suite.
+
 Do you miss the speed of your local editor when working in the browser? Monaco Text Macros bridges that gap by adding seamless, Obsidian-style macro expansion to your web workflow.
 
 Key Features:
@@ -15,6 +17,7 @@ How to Use:
 2. Navigate: Go to a supported site like prism.openai.com.
 3. Type: Enter a trigger (e.g., ";hello" or "mk") and press the expansion key.
 4. Configure: Click the extension icon to open the Options page, where you can add, remove, or customize your own macros.
+5. Learn: Check out our documentation and cheatsheet at https://github.com/artisticat1/obsidian-latex-suite?tab=readme-ov-file#cheatsheet
 
 Privacy & Security:
 This extension operates entirely locally. It does not collect, store, or transmit any of your personal data, keystrokes, or code. Your macros are saved securely in your browser's local storage.

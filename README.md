@@ -11,5 +11,6 @@ To run:
 ```bash
 bun run index.ts
 ```
+## Documentation
 
-This project was created using `bun init` in bun v1.3.3. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+For a list of supported LaTeX macros and syntax, check out the [Obsidian LaTeX Suite cheatsheet](https://github.com/artisticat1/obsidian-latex-suite?tab=readme-ov-file#cheatsheet).
