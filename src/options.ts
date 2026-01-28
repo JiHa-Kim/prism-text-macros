@@ -31,7 +31,7 @@ const showStatus = (msg: string, type: 'success' | 'error' = 'success') => {
 const renderMacroList = (filter: string = '') => {
   macroList.innerHTML = '';
   const filtered = allMacros.filter(m => {
-    const triggerStr = m.trigger instanceof RegExp ? m.trigger.source : m.trigger;
+    const triggerStr = m.trigger instanceof RegExp ? m.trigger.source : (m.trigger || "");
     const desc = m.description || '';
     return triggerStr.toLowerCase().includes(filter.toLowerCase()) || 
            desc.toLowerCase().includes(filter.toLowerCase());
