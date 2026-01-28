@@ -11,9 +11,9 @@ export const defaultSnippets: Macro[] = [
   { trigger: "H", replacement: "\\bbox[lightyellow]{${VISUAL}}$0", options: "mA", description: "highlight bg" },
   { trigger: "C", replacement: "\\textcolor{$0}{${VISUAL}}$1", options: "mA", description: "manual color name \\textcolor{…}{selection}" },
 
-  // Math mode (fixed: previously text mode)
-  { trigger: "mk", replacement: "$$0$", options: "mA" },
-  { trigger: "dm", replacement: "$$\n$0\n$$", options: "mAw" },
+  // Math mode helpers: these MUST be text-mode so you can type them outside math to create math
+  { trigger: "mk", replacement: "$$0$", options: "tA" },
+  { trigger: "dm", replacement: "$$\n$0\n$$", options: "tAw" },
   { trigger: "beg", replacement: "\\begin{$0}\n$1\n\\end{$0}", options: "mA" },
 
   // Greek letters
