@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Prism LaTeX Snippets - Options</title>
+    <style>
+      body { font: 14px system-ui, sans-serif; margin: 16px; max-width: 800px; margin: 0 auto; padding: 20px; }
+      textarea { width: 100%; height: 60vh; font-family: monospace; }
+      button { margin-top: 12px; padding: 8px 16px; cursor: pointer; }
+      .hint { opacity: 0.8; margin-bottom: 8px; line-height: 1.5; }
+      .error { color: red; margin-top: 8px; }
+      .success { color: green; margin-top: 8px; }
+      h1 { font-size: 1.5rem; margin-bottom: 1rem; }
+    </style>
+  </head>
+  <body>
+    <h1>Prism Text Macros Settings</h1>
+    <div class="hint">
+      <p>Edit your snippets below as a JSON array.</p>
+      <p>Format: <code>{ "trigger": "...", "replacement": "...", "options": "mA" }</code></p>
+      <p>Placeholders: <code>${1}</code>, <code>${2}</code>, <code>${0}</code> (cursor). <br>
+      Visual selection: <code>${VISUAL}</code>.</p>
+    </div>
+    <textarea id="box"></textarea>
+    <div>
+        <button id="save">Save Macros</button>
+        <button id="reset">Reset to Defaults</button>
+    </div>
+    <div id="status"></div>
+    <script src="../dist/options.js" type="module"></script>
+  </body>
+</html>

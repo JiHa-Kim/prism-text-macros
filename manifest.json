@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "Prism LaTeX Snippets",
+  "version": "0.1.0",
+  "description": "Obsidian-like LaTeX snippet expansion for prism.openai.com",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://prism.openai.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://prism.openai.com/*"
+      ],
+      "js": [
+        "dist/content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_ui": {
+    "page": "public/options.html",
+    "open_in_tab": true
+  },
+  "commands": {
+    "toggle-snips": {
+      "suggested_key": {
+        "default": "Alt+Shift+S"
+      },
+      "description": "Toggle snippet expansion"
+    }
+  },
+  "background": {
+    "service_worker": "dist/background.js"
+  }
+}

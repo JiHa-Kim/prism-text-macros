@@ -1,0 +1,14 @@
+{
+  "name": "prism-text-macros",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/chrome": "^0.1.36",
+    "esbuild": "^0.27.2"
+  },
+  "peerDependencies": {
+    "typescript": "^5.9.3"
+  }
+}
