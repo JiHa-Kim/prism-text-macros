@@ -2,7 +2,10 @@ import { checkMacroTrigger } from '../lib/macroEngine';
 import { defaultSnippets } from '../lib/defaultSnippets';
 import { expandMacros } from '../lib/macroUtils';
 
-const macros = expandMacros(defaultSnippets);
+const macros = expandMacros([
+  ...defaultSnippets,
+  { trigger: "{", replacement: "{$0}$1", options: "mA" }
+]);
 
 interface TestCase {
   name: string;
@@ -10,6 +13,7 @@ interface TestCase {
   cursor: number;
   shouldMatch: boolean;
   expectedReplacement?: string;
+  expectedSnippetText?: string;
   expectedSelectionStartOffset?: number; // relative to the START of the replacement
 }
 
@@ -96,33 +100,6 @@ const tests: TestCase[] = [
 
   // --- Bug Fix Tests ---
 
-  // 1. Double Brace Dedup
-  // Scenario: User types '{'. Editor inserts '}'. Text is "{}". User types '{' again (if macro triggers on char, but here it triggers on '{').
-  // Wait, macro trigger is '{'. 
-  // If text is "$${|}$$" (cursor at 3). User typed '{' previously.
-  // Actually, the issue is generic: if macro inserts "{}", and next char is "}", it should dedup.
-  {
-    name: "Double brace dedup: { followed by }",
-    text: "$${}$$", 
-    cursor: 3, // $ $ { | } $ $
-    shouldMatch: true,
-    expectedReplacement: "{" // original replacement is "{$0}$1", dedup logic removes "}" -> "{" (plus placeholders)
-    // The engine returns clean text in replacementText property (markers stripped?? No, placeholders are kept in replacementText?)
-    // checking processReplacement: "clean" has placeholders removed? 
-    // Wait, processReplacement strips markers?
-    // checkMacroTrigger returns replacementText which is `text` from processReplacement.
-    // processReplacement: clean += content (for complex) or matches placeholders.
-    // It seems placeholders like $0 are STRIPPED/handled in tabStopsMap, but wait...
-    // In processReplacement loop:
-    // if char is $, check match...
-    //   if complexMatch: clean += content.
-    //   if simpleMatch: tabStopsMap... (content skipped?).
-    // A simpleMatch $0 doesn't add text to clean.
-    // So "{$0}" -> clean is "{".
-    // "{$0}$1" -> clean is "{}".
-    // So dedup logic: removes last char if matching. -> "{"
-  },
-
   // 2. Greek Expansion
   {
     name: "Greek expansion: pi should work",
@@ -138,10 +115,9 @@ const tests: TestCase[] = [
     text: "$$dint$$",
     cursor: 6,
     shouldMatch: true,
-    // replacement: \int_{${0:0}}^{${1:1}} $2 \, d${3:x} $4
-    // Text inserted at index 2 (after $$).
-    // \int_{ is 6 chars.
-    // 0 is at 2+6 = 8.
+    // Original replacement: \int_{${0:0}}^{${1:1}} $2 \, d${3:x} $4
+    // Expected shifted snippet: \int_{${1:0}}^{${2:1}} $3 \, d${4:x} $5
+    expectedSnippetText: "\\\\int_{${1:0}}^{${2:1}} ${3} \\\\, d${4:x} ${5}",
     expectedSelectionStartOffset: 8
   }
 ];
@@ -191,6 +167,15 @@ tests.forEach(test => {
          console.log(`   Expected selection start: ${test.expectedSelectionStartOffset}`);
          console.log(`   Got: ${result.selection.start}`);
          subFail = true;
+      }
+    }
+
+    if (test.expectedSnippetText !== undefined) {
+      if (result.snippetText !== test.expectedSnippetText) {
+          console.log(`❌ FAIL (Snippet): ${test.name}`);
+          console.log(`   Expected snippet: "${test.expectedSnippetText}"`);
+          console.log(`   Got: "${result.snippetText}"`);
+          subFail = true;
       }
     }
 

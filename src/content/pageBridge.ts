@@ -166,32 +166,10 @@ function attachEditor(ed: any, monaco: any) {
   } catch {}
 
   // Install Tab / Shift+Tab commands for tabstops
-  try {
-    const runTab = (dir: 1 | -1) => {
-      const m = ed.getModel?.();
-      if (!m) return;
-
-      const state = activeMacroByEditor.get(ed);
-      if (!state || state.stops.length === 0) return;
-
-      const next = state.idx + dir;
-      if (next >= state.stops.length || next < 0) {
-        activeMacroByEditor.set(ed, null);
-        return;
-      }
-
-      state.idx = next;
-      const stop = state.stops[next];
-      setSelectionByOffsets(ed, m, monaco, stop.start, stop.end);
-    };
-
-    // Tab
-    ed.addCommand?.(monaco.KeyCode.Tab, () => runTab(1));
-    // Shift+Tab
-    ed.addCommand?.(monaco.KeyMod.Shift | monaco.KeyCode.Tab, () => runTab(-1));
-  } catch {
-    // If addCommand isn't available, we still get macro expansion correctness.
-  }
+  // REMOVED: Monaco snippet controller handles Tab now.
+  // try {
+  //   const runTab = (dir: 1 | -1) => { ... }
+  // } catch { ... }
 
   // Main expansion loop
   ed.onDidChangeModelContent?.(() => {
@@ -240,14 +218,27 @@ function attachEditor(ed: any, monaco: any) {
           endPos.column
         );
 
-        ed.executeEdits("prism-macro", [{ range, text: match.replacementText, forceMoveMarkers: true }]);
+        // Select the trigger range, then insert a Monaco snippet so Monaco owns tabstops
+        // Insert snippet (Monaco handles tabstops + suggest/Tab compat)
+        try {
+          const controller = ed.getContribution("snippetController2");
+          if (controller && typeof controller.insert === 'function') {
+            const overwriteBefore = match.triggerRange.end - match.triggerRange.start;
+            controller.insert(match.snippetText, { overwriteBefore: overwriteBefore, overwriteAfter: 0 });
+          } else {
+             throw new Error("Snippet controller not found");
+          }
+        } catch (e) {
+          console.warn("Prism Macro: Snippet insertion failed, falling back to basic replacement", e);
+          // Fallback if insertSnippet is unavailable
+          ed.executeEdits("prism-macro", [{ range, text: match.replacementText, forceMoveMarkers: true }]);
+          setSelectionByOffsets(ed, mm, monaco, match.selection.start, match.selection.end);
+        }
 
-        // After applying, set selection for first placeholder
-        setSelectionByOffsets(ed, mm, monaco, match.selection.start, match.selection.end);
+        // IMPORTANT: do not set activeMacroByEditor here anymore.
+        // Let Monaco manage snippet placeholders and Tab.
+        activeMacroByEditor.set(ed, null);
 
-        // Track tabstops (include the current selection as stop 0)
-        const allStops: TabStop[] = [match.selection, ...(match.tabStops || [])];
-        activeMacroByEditor.set(ed, { stops: allStops, idx: 0 });
       } finally {
         applyingByEditor.set(ed, false);
       }
